@@ -8,13 +8,16 @@ import requests
 from PIL import Image
 from osgeo import ogr, osr
 
+API_TIMEOUT = 10
+
+
 def get_pano_id(mission_year, bbox):
     """
     Get panoramic image id's for a user defined bounding box region
     """
     pano_url = f"https://api.data.amsterdam.nl/panorama/panoramas/?tags=mission-{mission_year}&bbox={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}&srid=28992"
 
-    with requests.get(pano_url) as response:
+    with requests.get(pano_url, timeout=API_TIMEOUT) as response:
         pano_data_all = json.loads(response.content)
 
     pano_data = pano_data_all['_embedded']['panoramas']
@@ -28,7 +31,7 @@ def get_pano_id(mission_year, bbox):
 
     # Exit the while loop if there is no next page
     while next_page:
-        with requests.get(next_page) as response:
+        with requests.get(next_page, timeout=API_TIMEOUT) as response:
             pano_data_all = json.loads(response.content)
 
         pano_data = pano_data_all['_embedded']['panoramas']
@@ -48,33 +51,43 @@ def get_pano_image(pano_id):
     and convert it from WGS84 (EPSG:4326) to Rijksdriehoek (EPSG:28992)
     """
     pano_url = f"https://api.data.amsterdam.nl/panorama/panoramas/{pano_id}/"
-    with requests.get(pano_url) as response:
+    with requests.get(pano_url, timeout=API_TIMEOUT) as response:
         pano_data = json.loads(response.content)
 
     geom = pano_data['geometry']['coordinates']
 
     # WGS84 to Rijksdriehoek (RD) conversion
-    point = ogr.Geometry(ogr.wkbPoint)
-    point.AddPoint(geom[0], geom[1])
     source = osr.SpatialReference()
     source.ImportFromEPSG(4326)
     target = osr.SpatialReference()
     target.ImportFromEPSG(28992)
     transform = osr.CoordinateTransformation(source, target)
-    point.Transform(transform)
+
+    point = ogr.Geometry(ogr.wkbPoint)
+    point.AddPoint(geom[0], geom[1])
+    point_rd = ogr.Geometry(ogr.wkbPoint)
+    point_rd.AddPoint(geom[0], geom[1])
+
+    point_rd.Transform(transform)
 
     # Get image_url from API
     image_url = pano_data['_links']['equirectangular_medium']['href']
 
-    return str(image_url), (point.GetX(), point.GetY())
+    return (
+        str(image_url),
+        (point_rd.GetX(), point_rd.GetY()),
+        (point.GetX(), point.GetY()),
+    )
+
 
 def get_buildings_in_range(observer, radius):
     """
     For a panoramic image, get the buildings that are whitin a user defined range.
     """
-    bag_url = f"https://api.data.amsterdam.nl/bag/pand/?locatie={observer[0]},{observer[1]},{radius}&detailed=!"
-    with requests.get(bag_url) as response:
-        bag_data = json.loads(response.content)['results']
+    bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie%5Bwithin%5D=POINT%28{observer[0]}+{observer[1]}%29%2C{radius}"
+
+    with requests.get(bag_url, timeout=API_TIMEOUT) as response:
+        bag_data = json.loads(response.content)["_embedded"]["panden"]
 
     return bag_data
 
@@ -84,8 +97,8 @@ def get_building_polygons(pand_json):
 
     # Loop over json content
     for item in pand_json:
-        pand_id = item['pandidentificatie']
-        pand_polygon = item['geometrie']['coordinates'][0]
+        pand_id = item["identificatie"]
+        pand_polygon = item["geometrie"]["coordinates"][0]
 
         # A polygon should have at least 3 vertices to be a valid polygon
         if(len(pand_polygon) > 2 and pand_id):
@@ -99,7 +112,7 @@ def get_building_polygons(pand_json):
 def download_pano_image(pano_url):
     """ Download a panoramic image from the API """
     try:
-        response = requests.get(pano_url)
+        response = requests.get(pano_url, timeout=API_TIMEOUT)
         source_image = Image.open(BytesIO(response.content))
     except requests.exceptions.RequestException:
         print('HTTP Request failed. Aborting.')

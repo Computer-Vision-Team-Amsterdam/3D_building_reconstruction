@@ -25,7 +25,7 @@ from src.array_math import get_midpoint, vector_length, vector
 from src.furthest_pair import get_furthest_pair
 
 # Multiprocessing options
-NUM_CPUS = 5
+NUM_CPUS = 1
 
 # API options
 BBOX_REGION = [122300.00,486628.78,122400.00,486475.48]
@@ -55,10 +55,10 @@ def get_visible_building_edges(pano_ids, facade_data):
     """
     for pano_id in pano_ids:
         # Get the panoramic image url and the location of the "observer"
-        image_url, observer = get_pano_image(pano_id)
+        image_url, observer, observer_wgs = get_pano_image(pano_id)
 
         # Get BAG "pand" information. Search radius in meters from point "near"
-        pand_json = get_buildings_in_range(observer, SEARCH_RADIUS)
+        pand_json = get_buildings_in_range(observer_wgs, SEARCH_RADIUS)
 
         # Get a dict of the buildings (footprint data) in range
         building_polygons = get_building_polygons(pand_json)
@@ -196,6 +196,8 @@ def main():
 
     # Get the panoramas (from API)
     pano_ids = get_pano_id(MISSION_YEAR, BBOX_REGION)
+
+    print(f"Found {len(pano_ids)} panorama images")
 
     # Split the array into N chunks
     pano_id_chunk = np.array_split(pano_ids, NUM_CPUS)
