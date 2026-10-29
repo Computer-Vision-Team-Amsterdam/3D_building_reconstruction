@@ -1,8 +1,12 @@
-from numpy.core.umath import sqrt, square, arccos, arctan2, mod, pi
+# small vector helpers used throughout the pipeline: 2D vectors on the map, and the conversion from a 3D direction vector to a pixel position on equirectangular panorama
+
+# NumPy 2.x: import from numpy directly (numpy.core.umath is deprecated)
+from numpy import sqrt, square, arccos, arctan2, mod, pi
 
 # Helper constants for readability
 X, Y = 0, 1
 
+# 2D helpers
 def vector(from_2d, to_2d):
     return to_2d[X] - from_2d[X], to_2d[Y] - from_2d[Y]
 
@@ -11,12 +15,12 @@ def vector_length(vector_2d):
 
 def get_midpoint(vertices):
     return ((vertices[0][X] + vertices[1][X]) / 2, (vertices[0][Y] + vertices[1][Y]) / 2)
-
+    
+# 3D helpers
 def get_vector(to_point, from_point):
     """
     Calculate a 3D vector from from_point to to_point,
     also works on numpy 2D arrays of points
-
 
     :param to_point: 3d tuple of the point the vector will point to
     :param from_point: 3d tuple of the point the vector will point from
@@ -33,7 +37,6 @@ def get_cartesian_vector_from_rd(to_point, from_point):
     Calculate a 3D vector from from_point to to_point,
     also works on numpy 2D arrays of points,
     reorders dimensions from rd to cartesian
-
 
     :param to_point: 3d tuple of the point the vector will point to
     :param from_point: 3d tuple of the point the vector will point from
