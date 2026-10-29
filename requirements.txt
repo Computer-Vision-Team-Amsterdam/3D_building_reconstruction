@@ -1,10 +1,24 @@
-scipy==1.2.1
-numpy==1.19.1
-matplotlib==3.3.1
-pillow==7.2.0
-pandas==1.1.1
-requests==2.24.0
-Shapely==1.6.4
-lxml==4.5.1
+# Requirements for the 3D_building_reconstruction notebooks (only for stage 1)
+# Python >= 3.10
 
+# Install:  pip install -r requirements.txt
+# Used by:  array_math, array_image, furthest_pair, visible_view, extract_texture, run, run_local, filter_images
 
+numpy>=1.26          # array maths, projection, resampling
+scipy>=1.11          # map_coordinates (image resampling)
+pandas>=2.0          # facade table, CSV/zip output
+shapely>=2.0         # footprints, visibility polygon, STRtree index
+pillow>=10.0 , <13     # image I/O (Image.fromarray(..., "RGB") mode argument is deprecated in newer releases)
+matplotlib>=3.7      # plots and texture previews
+pyproj>=3.4          # RD <-> WGS84 conversion (lon/lat inputs)
+
+# If running as notebooks
+ipykernel>=6.25      # kernel for VS Code / Jupyter
+# jupyterlab>=4.0    # only if you want the browser interface instead of VS Code
+
+# ---------------------------------------------------------------
+# NOT needed any more (old Amsterdam API / CGAL version):
+#   scikit-geometry, panorama, requests
+# Only install these when using api_request.ipynb:
+# panorama==0.2.4
+# requests>=2.31
