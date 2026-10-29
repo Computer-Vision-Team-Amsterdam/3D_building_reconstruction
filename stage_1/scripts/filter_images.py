@@ -19,11 +19,8 @@ OUTPUT_NAME = "output_stage1_filtered"
 
 def main():
     print("--- Start ---")
-
-    # Start timer
     start_time = time.time()
 
-    # Get the input csv with metadata of facade texture images
     df = pd.read_csv(INPUT_NAME, dtype={"pand_id": object})
 
     images = []
@@ -34,13 +31,12 @@ def main():
 
     df_output = df[df["texture_filename"].isin(images)].reset_index()
 
-    # Save the filtered file
     filtered_df = df_output[["pand_id", "visible_point_one", "visible_point_two", "texture_filename"]]
     compression_opts = dict(method="zip", archive_name=OUTPUT_NAME + ".csv")
-    filtered_df.to_csv(OUTPUT_NAME + ".zip", index=False, 
-        compression=compression_opts)
+    filtered_df.to_csv(OUTPUT_NAME + ".zip", index=False, compression=compression_opts)
 
     print("--- %s seconds ---" % (time.time() - start_time))
+    return filtered_df
 
-if __name__ == "__main__":
-    main()
+filtered_df = main()
+filtered_df.head()
