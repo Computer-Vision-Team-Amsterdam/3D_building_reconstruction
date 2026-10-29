@@ -1,94 +1,83 @@
-from skgeom import *
+"""
+Computes which building vertices are visible from the panorama location (the "observer").
+This updated version uses the `shapely`/`numpy` ray-casting version of the module, it does not need `scikit-geometry` (`skgeom`). That package has no builds for Python >3.10, therefore it cannot be installed in this environment. The function names and signatures are unchanged, `run.py` should work as before
+"""
 
+import numpy as np
+from shapely.geometry import Polygon, Point
+
+TOL = 1e-4  # metres, tolerance for "vertex lies on the visibility boundary"
+
+# Build the set of walls and building edges: replaces the `skgeom` arrangement with a plain `(n, 4)` array of segments `(x1, y1, x2, y2)`, including a square bounding box around the observer
 def generate_arrangement(observer, building_polygons):
-    """ Create a 2D arrangement using skgeom """
-    arr = arrangement.Arrangement()
-
+    """ Collect all wall + building segments (replaces the skgeom arrangement) """
     set_range = 60
-    left_x = observer[0] - set_range
-    left_y = observer[1] - set_range
-    right_x = observer[0] + set_range
-    right_y = observer[1] + set_range
+    lx, ly = observer[0] - set_range, observer[1] - set_range
+    rx, ry = observer[0] + set_range, observer[1] + set_range
 
-    walls = [
-        Segment2(Point2(left_x, left_y), Point2(left_x, right_y)),
-        Segment2(Point2(left_x, right_y), Point2(right_x, right_y)),
-        Segment2(Point2(right_x, right_y), Point2(right_x, left_y)),
-        Segment2(Point2(right_x, left_y), Point2(left_x, left_y))
+    segments = [
+        (lx, ly, lx, ry), (lx, ry, rx, ry),
+        (rx, ry, rx, ly), (rx, ly, lx, ly),
     ]
-
-    for s in walls:
-        arr.insert(s)
-
     for poly in building_polygons:
-        building_edges = points_2_edges(poly)
-
-        for s in building_edges:
-            arr.insert(s)
-
-    return arr
-
+        for i in range(1, len(poly)):
+            segments.append((poly[i-1][0], poly[i-1][1], poly[i][0], poly[i][1]))
+    return np.array(segments, dtype=float)
+    
 def points_2_edges(pts):
     """ Make edges """
-    edges = []
-    for i in range(1,len(pts)):
-        e = Segment2(Point2(pts[i-1][0], pts[i-1][1]),
-                     Point2(pts[i][0], pts[i][1]))
-        edges.append(e)
-    return edges
+    return [(pts[i-1][0], pts[i-1][1], pts[i][0], pts[i][1]) for i in range(1, len(pts))]
 
+# Visibility polygon: casts a ray from the observer towards every segment endpoint, plus a small offset to either side, and keeps the nearest hit for each ray. The hit points form the visibility polygon
 def get_visibility_polygon(arr, observer):
-    """
-    Compute the visibility from a specific point inside
-    the arrangement
-    """
-    vs = TriangularExpansionVisibility(arr)
-    q = Point2(observer[0], observer[1])
-    face = arr.find(q)
-    vx = vs.compute_visibility(q, face)
+    """ Visibility polygon from the observer via ray casting against all segments """
+    ox, oy = observer[0], observer[1]
+    p = arr[:, 0:2]                      # segment starts (n,2)
+    s = arr[:, 2:4] - arr[:, 0:2]        # segment vectors (n,2)
 
-    ############### Draw Arrangement ###############
-    # draw_arrangement(arr, vx, q)
+    # Cast a ray at every segment endpoint, plus a tiny offset either side
+    ends = np.vstack([arr[:, 0:2], arr[:, 2:4]])
+    base = np.arctan2(ends[:, 1] - oy, ends[:, 0] - ox)
+    eps = 1e-7
+    angles = np.unique(np.concatenate([base - eps, base, base + eps]))
 
-    # Get all edges of Visibility Polygon
-    allEdges = [v.point() for v in vx.vertices]
+    d = np.stack([np.cos(angles), np.sin(angles)], axis=1)       # (m,2)
+    po = p - np.array([ox, oy])                                   # (n,2)
 
-    return Polygon(allEdges)
+    denom = d[:, None, 0] * s[None, :, 1] - d[:, None, 1] * s[None, :, 0]      # (m,n)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        t = (po[None, :, 0] * s[None, :, 1] - po[None, :, 1] * s[None, :, 0]) / denom
+        u = (po[None, :, 0] * d[:, None, 1] - po[None, :, 1] * d[:, None, 0]) / denom
+    valid = (np.abs(denom) > 1e-12) & (t >= 0) & (u >= -1e-9) & (u <= 1 + 1e-9)
+    t = np.where(valid, t, np.inf)
+    t_min = t.min(axis=1)
+
+    hit = np.isfinite(t_min)
+    pts = np.stack([ox + t_min[hit] * d[hit, 0], oy + t_min[hit] * d[hit, 1]], axis=1)
+
+    poly = Polygon(pts)
+    if not poly.is_valid:
+        poly = poly.buffer(0)
+    return poly
+
 
 def draw_arrangement(arr, vx, q, save_file=False):
-    """
-    Draw 2D arrangement with buildings and initial
-    panoramic image location
-    """
+    """ Debug plot: walls/buildings in blue, visibility polygon in red """
     from matplotlib import pyplot as plt
-
     plt.figure(figsize=(10, 10))
-    plt.xlabel("X Position")
-    plt.ylabel("Y Position")
+    for x1, y1, x2, y2 in arr:
+        plt.plot([x1, x2], [y1, y2], "b")
+    xs, ys = vx.exterior.xy
+    plt.plot(xs, ys, "r:")
+    plt.scatter(q[0], q[1], color="b")
+    plt.savefig("vispol.png") if save_file else plt.show()
 
-    # Draw walls and buildings
-    for he in arr.halfedges:
-        plt.plot([he.curve().source().x(), he.curve().target().x()],
-                     [he.curve().source().y(), he.curve().target().y()], "b")
 
-    # Draw Visibility Polygon
-    for he in vx.halfedges:
-        plt.plot([he.curve().source().x(), he.curve().target().x()],
-                     [he.curve().source().y(), he.curve().target().y()], "r:")
-
-    plt.scatter(q.x(), q.y(), color="b")
-    if save_file:
-        plt.savefig("vispol.eps", format="eps")
-    else:
-        plt.show()
-
+# Which building vertices are visible
 def point_in_visibility_polygon(building_poly, visibility_polygon):
-    """ Check wether a given point is inside the visibility polygon """
+    """ Keep building vertices that are inside or on the visibility polygon """
     visible_points = []
-
-    for x,y in building_poly:
-        position = visibility_polygon.oriented_side(Point2(x, y))
-        if position == Sign.ZERO or position == Sign.POSITIVE:
+    for x, y in building_poly:
+        if visibility_polygon.distance(Point(x, y)) <= TOL:
             visible_points.append([x, y])
-
     return visible_points
