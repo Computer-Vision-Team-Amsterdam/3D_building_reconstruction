@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "3D_building_reconstruction"
+version = "0.1"
+description = "Reconstruct 3D building textures from panorama images."
+authors = [
+    {name = "Daan Bloembergen", email = "d.bloembergen@amsterdam.nl"},
+    {name = "Weiyi Ding", email = "w.ding@amsterdam.nl"},
+]
+maintainers = [
+    { name = "Computer Vision Team, Gemeente Amsterdam", email = "cvt@amsterdam.nl" },
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "geopandas",
+    "numpy>=1.26",
+    "pandas>=2.0",
+    "pillow>=10.0, <13",
+    "pyproj>=3.4",
+    "requests",
+    "scipy>=1.11",
+    "shapely>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ipykernel==6.*",
+    "ipywidgets",
+    "matplotlib>=3.7",
+    "nbstripout>=0.7.1",
+    "pre-commit>=3.2.0",
+    "pytest>=7.0.1",
+    "pytest-cov>=4.0.0",
+    "safety>=3.2.4",
+]
+
+[tool.setuptools.packages.find]
+include=["stage_1"]
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
