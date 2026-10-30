@@ -6,7 +6,7 @@ from io import BytesIO
 import json
 import requests
 from PIL import Image
-from osgeo import ogr, osr
+from pyproj import Transformer
 
 API_TIMEOUT = 10
 
@@ -45,6 +45,7 @@ def get_pano_id(mission_year, bbox):
 
     return pano_id
 
+
 def get_pano_image(pano_id):
     """
     Get a panoramic image and its initial location coordinates
@@ -57,26 +58,16 @@ def get_pano_image(pano_id):
     geom = pano_data['geometry']['coordinates']
 
     # WGS84 to Rijksdriehoek (RD) conversion
-    source = osr.SpatialReference()
-    source.ImportFromEPSG(4326)
-    target = osr.SpatialReference()
-    target.ImportFromEPSG(28992)
-    transform = osr.CoordinateTransformation(source, target)
-
-    point = ogr.Geometry(ogr.wkbPoint)
-    point.AddPoint(geom[0], geom[1])
-    point_rd = ogr.Geometry(ogr.wkbPoint)
-    point_rd.AddPoint(geom[0], geom[1])
-
-    point_rd.Transform(transform)
+    lon, lat = geom[0], geom[1]
+    x_rd, y_rd = wgs84_to_rd.transform(lon, lat)
 
     # Get image_url from API
     image_url = pano_data['_links']['equirectangular_medium']['href']
 
     return (
         str(image_url),
-        (point_rd.GetX(), point_rd.GetY()),
-        (point.GetX(), point.GetY()),
+        (x_rd, y_rd),
+        (lon, lat),
     )
 
 
@@ -87,6 +78,23 @@ def get_buildings_in_range(observer, radius):
     bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie%5Bwithin%5D=POINT%28{observer[0]}+{observer[1]}%29%2C{radius}"
 
     with requests.get(bag_url, timeout=API_TIMEOUT) as response:
+        bag_data = json.loads(response.content)["_embedded"]["panden"]
+
+    return bag_data
+
+# Buildings (BAG)
+def get_buildings_in_range(observer, radius):
+    """
+    For a panoramic image, get the buildings that are whitin a user defined range.
+    """
+    bag_url = "https://api.data.amsterdam.nl/v1/bag/panden"
+    # POINT(x y),d with x, y in RD metres and d the distance in metres
+    params = {"geometrie[within]": f"POINT({observer[0]} {observer[1]}),{radius}"}
+    headers = {"Accept-Crs": "EPSG:28992", "Content-Crs": "EPSG:28992"}
+
+    with requests.get(bag_url, params=params, headers=headers, timeout=API_TIMEOUT) as response:
+        if not response.ok:
+            raise RuntimeError(f"BAG request failed ({response.status_code}): {response.text[:300]}")
         bag_data = json.loads(response.content)["_embedded"]["panden"]
 
     return bag_data
@@ -119,3 +127,4 @@ def download_pano_image(pano_url):
         return
 
     return source_image
+    
