@@ -78,29 +78,13 @@ def get_buildings_in_range(observer, radius):
     """
     For a panoramic image, get the buildings that are whitin a user defined range.
     """
-    bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie%5Bwithin%5D=POINT%28{observer[0]}+{observer[1]}%29%2C{radius}"
+    bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie[within]=POINT({observer[0]} {observer[1]}),{radius}"
 
     with requests.get(bag_url, timeout=API_TIMEOUT) as response:
         bag_data = json.loads(response.content)["_embedded"]["panden"]
 
     return bag_data
 
-# Buildings (BAG)
-def get_buildings_in_range(observer, radius):
-    """
-    For a panoramic image, get the buildings that are whitin a user defined range.
-    """
-    bag_url = "https://api.data.amsterdam.nl/v1/bag/panden"
-    # POINT(x y),d with x, y in RD metres and d the distance in metres
-    params = {"geometrie[within]": f"POINT({observer[0]} {observer[1]}),{radius}"}
-    headers = {"Accept-Crs": "EPSG:28992", "Content-Crs": "EPSG:28992"}
-
-    with requests.get(bag_url, params=params, headers=headers, timeout=API_TIMEOUT) as response:
-        if not response.ok:
-            raise RuntimeError(f"BAG request failed ({response.status_code}): {response.text[:300]}")
-        bag_data = json.loads(response.content)["_embedded"]["panden"]
-
-    return bag_data
 
 def get_building_polygons(pand_json):
     """ Get the polygon of a building """
