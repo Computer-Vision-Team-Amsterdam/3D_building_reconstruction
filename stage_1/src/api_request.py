@@ -10,6 +10,9 @@ from pyproj import Transformer
 
 API_TIMEOUT = 10
 
+# WGS84 (EPSG:4326, lon/lat) to Rijksdriehoek (EPSG:28992, metres); always_xy keeps the order (lon, lat) / (x, y)
+wgs84_to_rd = Transformer.from_crs("EPSG:4326", "EPSG:28992", always_xy=True)
+
 
 def get_pano_id(mission_year, bbox):
     """
