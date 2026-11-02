@@ -36,7 +36,7 @@ def main():
     filtered_df.to_csv(OUTPUT_NAME + ".zip", index=False, compression=compression_opts)
 
     print("--- %s seconds ---" % (time.time() - start_time))
-    return filtered_df
 
-filtered_df = main()
-filtered_df.head()
+
+if __name__ == "__main__":
+    main()
