@@ -93,7 +93,7 @@ class FacadeExtractor:
                 # Validation 1. The length of a "normal" facade is at least more than 2 meters
                 if facade_length < 2:
                     # Go to next iteration of for loop, check for other buildings in same panorama
-                    break
+                    continue
 
                 # Distance observer to middlepoint
                 midpoint = array_math.get_midpoint(visible_points_left_right)
@@ -105,7 +105,7 @@ class FacadeExtractor:
                 # Validation 2. Errors are found in the rectification process when the distance is above 9
                 if new_data["distance"] > self.max_building_distance:
                     # Go to next iteration of for loop, check for other buildings in same panorama
-                    break
+                    continue
 
                 # Fill dict after all the validation checks
                 new_data["pand_id"] = str(pand_id)
