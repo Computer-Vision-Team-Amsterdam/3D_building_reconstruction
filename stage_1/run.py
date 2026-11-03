@@ -1,44 +1,53 @@
 """
-The first stage of the pipeline determines — within a captured panoramic image sequence — the
-texture region for each building (pand_id) to be reconstructed.
+The first stage of the pipeline determines — within a captured panoramic image
+sequence — the texture region for each building (pand_id) to be reconstructed.
 
-There are three input sources used in this stage: BAG building footprint data, panoramic
-images, and GNSS/INS sensor values. The initial GNSS/INS sensor specifies the camera’s
-geospatial location and orientation information that correspond to each of the panoramic
-images.
+There are three input sources used in this stage: BAG building footprint data,
+panoramic images, and GNSS/INS sensor values. The initial GNSS/INS sensor
+specifies the camera’s geospatial location and orientation information that
+correspond to each of the panoramic images.
 
 NOTE: Change the variables BBOX_REGION and MISSION_YEAR to your own settings!
 """
 
 import os
 import time
-from multiprocessing import Process, Manager
-from shapely.geometry import Point, Polygon
+
 import pandas as pd
-import numpy as np
+from shapely.geometry import Point, Polygon
 
 # External Python files
-from src.api_request import *
-from src.extract_texture import export_line_to_texture
-from src.visible_view import generate_arrangement, get_visibility_polygon, point_in_visibility_polygon
-from src.array_math import get_midpoint, vector_length, vector
-from src.furthest_pair import get_furthest_pair
+from stage_1.src.api_request import (
+    download_pano_image,
+    get_building_polygons,
+    get_buildings_in_range,
+    get_pano_id,
+    get_pano_image,
+)
+from stage_1.src.array_math import get_midpoint, vector, vector_length
+from stage_1.src.extract_texture import export_line_to_texture
+from stage_1.src.furthest_pair import get_furthest_pair
+from stage_1.src.visible_view import (
+    generate_arrangement,
+    get_visibility_polygon,
+    point_in_visibility_polygon,
+)
 
 # Multiprocessing options
 NUM_CPUS = 1
 
 # API options
-BBOX_REGION = [122300.00,486628.78,122400.00,486475.48]
-MISSION_YEAR = 2018 # API tag
-SEARCH_RADIUS = 10 # Building search radius from an initial panoramic image location
+BBOX_REGION = [122300.00, 486628.78, 122400.00, 486475.48]
+MISSION_YEAR = 2025  # API tag
+SEARCH_RADIUS = 10  # Building search radius from an initial panoramic image location
 
 # Texture options
 TEXTURE_RESOLUTION = 30
-IMAGE_HEIGHT_IRL = 30 # In meters, buildings above 30m are therefore partly cropped
-CAMERA_HEIGHT = 2 # Height of the camera mounted on the car
+IMAGE_HEIGHT_IRL = 30  # In meters, buildings above 30m are therefore partly cropped
+CAMERA_HEIGHT = 2  # Height of the camera mounted on the car
 
 # Validation options before rectification (strict settings)
-MIN_DISTANCE = 1.7 # Min distance camera to building
+MIN_DISTANCE = 1.7  # Min distance camera to building
 MAX_DISTANCE = 9
 MIN_BUILDING_AREA = 15
 MAX_BUILDING_AREA = 400
@@ -46,12 +55,11 @@ MAX_BUILDING_AREA = 400
 IMAGES_OUTPUT = "texture_output/"
 OUTPUT_NAME = "output_stage1"
 
+
 def get_visible_building_edges(pano_ids, facade_data):
     """
-    Estimation of buildings in range and identify visible building
-    edges in 2D map.
-
-    Function will be executed on different workers
+    Estimation of buildings in range and identify visible building edges in 2D
+    map.
     """
     for pano_id in pano_ids:
         # Get the panoramic image url and the location of the "observer"
@@ -67,7 +75,7 @@ def get_visible_building_edges(pano_ids, facade_data):
         building_polygons = get_admissible_data(observer, building_polygons)
 
         if not building_polygons:
-            #print("No admissible building polygons in range. Go to the next panorama")
+            # print("No admissible building polygons in range. Go to the next panorama")
             continue
 
         # Generate the outlines of the arrangement
@@ -77,13 +85,14 @@ def get_visible_building_edges(pano_ids, facade_data):
         visibility_polygon = get_visibility_polygon(arr, observer)
 
         # Get two most distant visible points of a builing
-        get_facade_coordinates(building_polygons, visibility_polygon, observer, image_url, facade_data)
+        get_facade_coordinates(
+            building_polygons, visibility_polygon, observer, image_url, facade_data
+        )
+
 
 def extract_facade_texture(df: pd.DataFrame):
     """
     Extract facade textures from panoramic images.
-
-    Function will be executed on different workers
     """
     for group_name, df_group in df.groupby(by="pano_image_url"):
         # Get the panoramic image
@@ -92,17 +101,22 @@ def extract_facade_texture(df: pd.DataFrame):
             # Iterate over the rows that are inside a group
             for _, row in df_group.iterrows():
                 # Create the facade texture
-                image_file = export_line_to_texture((row["visible_point_one"], row["visible_point_two"]),
-                                                    TEXTURE_RESOLUTION, IMAGE_HEIGHT_IRL, CAMERA_HEIGHT,
-                                                    source_image, row["observer"])
+                image_file = export_line_to_texture(
+                    (row["visible_point_one"], row["visible_point_two"]),
+                    TEXTURE_RESOLUTION,
+                    IMAGE_HEIGHT_IRL,
+                    CAMERA_HEIGHT,
+                    source_image,
+                    row["observer"],
+                )
                 # Save the facade texture
                 filename = row["texture_filename"]
                 image_file.save(f"{IMAGES_OUTPUT}{filename}.jpeg", "jpeg")
 
+
 def get_admissible_data(observer, building_polygons):
     """
-    Validate the GPS location of a panoramic image
-    and the size of a building.
+    Validate the GPS location of a panoramic image and the size of a building.
     """
     observer_point = Point(observer)
 
@@ -126,13 +140,18 @@ def get_admissible_data(observer, building_polygons):
 
     return admissible_building_polygons
 
-def get_facade_coordinates(building_polygons, visibility_polygon, observer, image_url, facade_data):
-    """ Get the two most distant visible points of a builing """
+
+def get_facade_coordinates(
+    building_polygons, visibility_polygon, observer, image_url, facade_data
+):
+    """Get the two most distant visible points of a building."""
     for pand_id in building_polygons.keys():
         new_data = {}
 
         # Get all the points from this polygon that are in the visibility polygon
-        visible_points = point_in_visibility_polygon(building_polygons[pand_id], visibility_polygon)
+        visible_points = point_in_visibility_polygon(
+            building_polygons[pand_id], visibility_polygon
+        )
 
         # Check if there are two or more visible points for a building
         if len(visible_points) >= 2:
@@ -142,7 +161,9 @@ def get_facade_coordinates(building_polygons, visibility_polygon, observer, imag
             # Two validation checks
 
             # Calculate the distance between two points
-            vector_facade = vector(visible_points_left_right[0], visible_points_left_right[1])
+            vector_facade = vector(
+                visible_points_left_right[0], visible_points_left_right[1]
+            )
             facade_length = vector_length(vector_facade)
 
             # Validation 1. The length of a "normal" facade is at least more than 2 meters
@@ -162,25 +183,33 @@ def get_facade_coordinates(building_polygons, visibility_polygon, observer, imag
 
             # Fill dict after all the validation checks
             new_data["pand_id"] = str(pand_id)
-            new_data["visible_point_one"] = tuple(visible_points_left_right[0]) # TODO why a tuple
+            new_data["visible_point_one"] = tuple(
+                visible_points_left_right[0]
+            )  # TODO why a tuple
             new_data["visible_point_two"] = tuple(visible_points_left_right[1])
             new_data["pano_image_url"] = image_url
             new_data["observer"] = observer
             # The distance value makes the filename unique
-            new_data["texture_filename"] = str(pand_id) + "_" + str(new_data["distance"])
+            new_data["texture_filename"] = (
+                str(pand_id) + "_" + str(new_data["distance"])
+            )
 
             facade_data.append(new_data)
 
+
 def save_results(df):
-    """ Save results of extracted facade textures """
-    df_output = df[["pand_id", "visible_point_one", "visible_point_two", "texture_filename"]]
+    """Save results of extracted facade textures"""
+    df_output = df[
+        ["pand_id", "visible_point_one", "visible_point_two", "texture_filename"]
+    ]
     compression_opts = dict(method="zip", archive_name=OUTPUT_NAME + ".csv")
     df_output.to_csv(OUTPUT_NAME + ".zip", index=False, compression=compression_opts)
 
+
 def main():
     """
-    Identify, rectify and extract the texture region of buildings
-    from a panoramic image sequence.
+    Identify, rectify and extract the texture region of buildings from a
+    panoramic image sequence.
     """
 
     # Create a directory, first check if it already exists
@@ -226,6 +255,7 @@ def main():
     save_results(df)
 
     print("--- %s seconds ---" % (time.time() - start_time))
+
 
 if __name__ == "__main__":
     main()

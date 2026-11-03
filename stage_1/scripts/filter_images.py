@@ -1,21 +1,22 @@
 """
-While the overall accuracy of the GNSS/INS sensor values are fairly high, it must 
-be noted that faulty location values still occur. 
+While the overall accuracy of the GNSS/INS sensor values are fairly high, it
+must be noted that faulty location values still occur.
 
-Validate the quality of the extracted facade texture images in the folder IMAGES_PATH
-and manually remove invalid ones.
+Validate the quality of the extracted facade texture images in the folder
+IMAGES_PATH and manually remove invalid ones.
 
 Run from the root of the "stage_1" folder, use: python3 -m scripts.filter_images
 """
 
-import pandas as pd
-import time
 import os
-import shutil
+import time
+
+import pandas as pd
 
 IMAGES_PATH = "texture_output/"
 INPUT_NAME = "output_stage1.csv"
 OUTPUT_NAME = "output_stage1_filtered"
+
 
 def main():
     print("--- Start ---")
@@ -31,7 +32,9 @@ def main():
 
     df_output = df[df["texture_filename"].isin(images)].reset_index()
 
-    filtered_df = df_output[["pand_id", "visible_point_one", "visible_point_two", "texture_filename"]]
+    filtered_df = df_output[
+        ["pand_id", "visible_point_one", "visible_point_two", "texture_filename"]
+    ]
     compression_opts = dict(method="zip", archive_name=OUTPUT_NAME + ".csv")
     filtered_df.to_csv(OUTPUT_NAME + ".zip", index=False, compression=compression_opts)
 

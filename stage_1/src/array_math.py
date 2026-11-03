@@ -1,21 +1,28 @@
 # small vector helpers used throughout the pipeline: 2D vectors on the map, and the conversion from a 3D direction vector to a pixel position on equirectangular panorama
 
 # NumPy 2.x: import from numpy directly (numpy.core.umath is deprecated)
-from numpy import sqrt, square, arccos, arctan2, mod, pi
+from numpy import arccos, arctan2, mod, pi, sqrt, square
 
 # Helper constants for readability
 X, Y = 0, 1
+
 
 # 2D helpers
 def vector(from_2d, to_2d):
     return to_2d[X] - from_2d[X], to_2d[Y] - from_2d[Y]
 
+
 def vector_length(vector_2d):
-    return sqrt(vector_2d[X]**2 + vector_2d[Y]**2)
+    return sqrt(vector_2d[X] ** 2 + vector_2d[Y] ** 2)
+
 
 def get_midpoint(vertices):
-    return ((vertices[0][X] + vertices[1][X]) / 2, (vertices[0][Y] + vertices[1][Y]) / 2)
-    
+    return (
+        (vertices[0][X] + vertices[1][X]) / 2,
+        (vertices[0][Y] + vertices[1][Y]) / 2,
+    )
+
+
 # 3D helpers
 def get_vector(to_point, from_point):
     """
@@ -27,9 +34,11 @@ def get_vector(to_point, from_point):
     :return: 3D tuple of the vector
     """
 
-    return to_point[0] - from_point[0], \
-           to_point[1] - from_point[1], \
-           to_point[2] - from_point[2]
+    return (
+        to_point[0] - from_point[0],
+        to_point[1] - from_point[1],
+        to_point[2] - from_point[2],
+    )
 
 
 def get_cartesian_vector_from_rd(to_point, from_point):
@@ -43,9 +52,11 @@ def get_cartesian_vector_from_rd(to_point, from_point):
     :return: 3D tuple of the reordered vector
     """
 
-    return to_point[1] - from_point[1], \
-           to_point[0] - from_point[0], \
-           to_point[2] - from_point[2]
+    return (
+        to_point[1] - from_point[1],
+        to_point[0] - from_point[0],
+        to_point[2] - from_point[2],
+    )
 
 
 def cartesian2cylindrical(vector, source_width, source_height, r_is_1=True):
@@ -55,7 +66,7 @@ def cartesian2cylindrical(vector, source_width, source_height, r_is_1=True):
 
     :param vector: 3d tuple of the point the vector
     :param source_width: width and
-    :param source_height:     height of the equirectangular image
+    :param source_height: height of the equirectangular image
     :param r_is_1: boolean, denoting if vectors are normalized to 1 (default=True)
     :return: 3D tuple of the coordinates of the vector on the equirectangular plane
     """
