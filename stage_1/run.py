@@ -79,13 +79,13 @@ def get_visible_building_edges(pano_ids, facade_data):
         # Get two most distant visible points of a builing
         get_facade_coordinates(building_polygons, visibility_polygon, observer, image_url, facade_data)
 
-def extract_facade_texture(grouped_chunk):
+def extract_facade_texture(df: pd.DataFrame):
     """
     Extract facade textures from panoramic images.
 
     Function will be executed on different workers
     """
-    for group_name, df_group in grouped_chunk:
+    for group_name, df_group in df.groupby(by="pano_image_url"):
         # Get the panoramic image
         source_image = download_pano_image(group_name)
         if source_image is not None:
@@ -199,44 +199,28 @@ def main():
 
     print(f"Found {len(pano_ids)} panorama images")
 
-    # Split the array into N chunks
-    pano_id_chunk = np.array_split(pano_ids, NUM_CPUS)
-
     print("Step 1: Identify visible building edges in range of a panoramic image")
 
-    facade_data = Manager().list()
-    jobs = []
-    for s in pano_id_chunk:
-        j = Process(target=get_visible_building_edges, args=(s, facade_data))
-        jobs.append(j)
-        j.start()
-    for j in jobs:
-        j.join()
+    facade_data = list()
+    get_visible_building_edges(pano_ids, facade_data)
 
     print("Step 2: Drop duplicate facade textures")
 
     # Create pandas dataframe to easily manipulate the data
-    df = pd.DataFrame(list(facade_data))
+    df = pd.DataFrame(facade_data)
 
     # Drop duplicate facade rows, keep the ones with shortest distance.
-    df = df.sort_values("distance", ascending=True).drop_duplicates(subset =
-        ["visible_point_one", "visible_point_two"]).sort_index().reset_index(drop=True)
-
-    # Group by image_url and later iterate over dataframe grouped by image_url
-    df_group = df.groupby(["pano_image_url"]) # Unfortunately, no parallel apply function in pandas
-
-    # Split the dataframe into N chunks (sub-dataframes)
-    df_group_chunk = np.array_split(df_group, NUM_CPUS)
+    df = (
+        df.sort_values("distance", ascending=True)
+        .drop_duplicates(subset=["visible_point_one", "visible_point_two"])
+        .sort_index()
+        .reset_index(drop=True)
+    )
 
     print("Step 3: Extract facade textures from panoramic images")
 
-    jobs = []
-    for s in df_group_chunk:
-        j = Process(target=extract_facade_texture, args=([s]))
-        jobs.append(j)
-        j.start()
-    for j in jobs:
-        j.join()
+    # Group by image_url and later iterate over dataframe grouped by image_url
+    extract_facade_texture(df)
 
     print("Step 4: Save the results")
     save_results(df)

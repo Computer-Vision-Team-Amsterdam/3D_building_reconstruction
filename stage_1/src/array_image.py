@@ -1,4 +1,4 @@
-from numpy import squeeze, dsplit, asarray, dstack
+from numpy import squeeze, dsplit, asarray, dstack, meshgrid, linspace
 from scipy.ndimage import map_coordinates
 
 def get_as_rgb_array(image_file):
@@ -26,17 +26,7 @@ def sample_rgb_array_image_as_array(coordinates, rgb_array):
     x = coordinates[0]
     y = coordinates[1]
 
-    """
-    Resample each channel of the source image.
-    This needs to be done "per channel", otherwise the map_coordinates method
-    works on the wrong dimension. From numpy.asarray(image) the first dimension
-    is the channel (r, g and b), and 2nd and 3rd dimensions are y and x. But,
-    map_coordinates expects the coordinates to map to be 1st and 2nd. 
-    Therefore, we extract each channel, so that y and x become 1st and 2nd
-    array. After resampling, we stack the three channels on top of each other,
-    to restore the rgb image array.
-    """
-
+    # Resample each channel of the source image, "per channel"
     r = map_coordinates(rgb_array[0], [y, x], order=1)
     g = map_coordinates(rgb_array[1], [y, x], order=1)
     b = map_coordinates(rgb_array[2], [y, x], order=1)

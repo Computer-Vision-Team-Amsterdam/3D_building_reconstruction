@@ -1,8 +1,9 @@
 """
-Code to determine the horizontal line segment of each facade, represented
-by bottom-left and bottom-right Rijksdriehoek corner points.
+Determines the horizontal line segment of each facade, represented by its bottom-left and bottom-right Rijksdriehoek corner points.
+The visible points of a building are assumed to be in counter-clockwise order. That order matters, because it fixes the left-to-right order used when cutting a texture out of the panorama.
 """
 
+# Main function
 def get_furthest_pair(visible_points, observer):
     """
     We assume that the list of polygon points of a building is arranged
@@ -44,6 +45,7 @@ def get_furthest_pair(visible_points, observer):
 
     return visible_points
 
+# Direction of the observer
 def direction_of_observer(visible_points, observer):
     """
     Determine direction of point from line segment
@@ -71,6 +73,7 @@ def direction_of_observer(visible_points, observer):
 
     return cross_product
 
+# Diameter of a point set (convex hull + rotating calipers)
 def orientation(p, q, r):
     """ Return positive if p-q-r are clockwise, neg if ccw, zero if colinear """
     return (q[1] - p[1]) * (r[0] - p[0]) - (q[0] - p[0]) * (r[1] - p[1])

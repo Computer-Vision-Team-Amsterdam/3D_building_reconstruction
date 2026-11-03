@@ -16,6 +16,8 @@ X, Y = 0, 1
 SOURCE_WIDTH = 4000 # pixels
 PANO_HEIGHT = 2000 # pixels
 
+
+# Funtion that projects each facade grid point onto the panorama and samples the colours. Facades that are not forward facing, or are viewed at too "tilted" angle, become a grey placeholder, unless `force=True`
 def project_facade(facade, observer, source_file, img_height, resolution, force=False):
     nx = int(round(facade["length"] * resolution))
     if nx > 0:
@@ -36,6 +38,8 @@ def project_facade(facade, observer, source_file, img_height, resolution, force=
         imarray = None
     return imarray
 
+
+# builds a 3D grid of points on the facade: `x`/`y` run along the bottom edge between the two visible points, `z` runs from the image height down to 0. Also computes the viewing angle, and a facade counts as forward facing when that angle is positive
 def create_plane(hoogte, img_height, resolution, observer, vertices):
     # Create dict elements for later
     line = {
@@ -74,17 +78,15 @@ def create_plane(hoogte, img_height, resolution, observer, vertices):
     line["y-mesh"] = gevel_y
     line["z-mesh"] = gevel_z
 
-    # You can plot the grid. It will show the visible facade borders (2D top view)
-    # from matplotlib import pyplot as plt
-    # plt.plot(gevel_x, gevel_y, marker=".", color="k", linestyle="none")
-
     return line
 
+
+# The entry point used by `run.py`. takes the two visible facade points, the resolution in pixels per metre, the image height in metres, the camera height, the source panorama and the observer's RD position, and returns a PIL image.
 def export_line_to_texture(visible_points, resolution, image_height_irl, camera_height, source_image, pano_rd):
     observer = (pano_rd[0], pano_rd[1], camera_height)
 
     img_height = int(round(image_height_irl * resolution))
     plane = create_plane(image_height_irl, img_height, resolution, observer, visible_points)
     facade = project_facade(plane, observer, source_image, img_height, resolution, force=True)
-    
+
     return Image.fromarray(facade.astype("uint8"), "RGB")
