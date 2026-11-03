@@ -6,9 +6,12 @@ from io import BytesIO
 import json
 import requests
 from PIL import Image
-from osgeo import ogr, osr
+from pyproj import Transformer
 
 API_TIMEOUT = 10
+
+# WGS84 (EPSG:4326, lon/lat) to Rijksdriehoek (EPSG:28992, metres); always_xy keeps the order (lon, lat) / (x, y)
+wgs84_to_rd = Transformer.from_crs("EPSG:4326", "EPSG:28992", always_xy=True)
 
 
 def get_pano_id(mission_year, bbox):
@@ -45,6 +48,7 @@ def get_pano_id(mission_year, bbox):
 
     return pano_id
 
+
 def get_pano_image(pano_id):
     """
     Get a panoramic image and its initial location coordinates
@@ -57,26 +61,16 @@ def get_pano_image(pano_id):
     geom = pano_data['geometry']['coordinates']
 
     # WGS84 to Rijksdriehoek (RD) conversion
-    source = osr.SpatialReference()
-    source.ImportFromEPSG(4326)
-    target = osr.SpatialReference()
-    target.ImportFromEPSG(28992)
-    transform = osr.CoordinateTransformation(source, target)
-
-    point = ogr.Geometry(ogr.wkbPoint)
-    point.AddPoint(geom[0], geom[1])
-    point_rd = ogr.Geometry(ogr.wkbPoint)
-    point_rd.AddPoint(geom[0], geom[1])
-
-    point_rd.Transform(transform)
+    lon, lat = geom[0], geom[1]
+    x_rd, y_rd = wgs84_to_rd.transform(lon, lat)
 
     # Get image_url from API
     image_url = pano_data['_links']['equirectangular_medium']['href']
 
     return (
         str(image_url),
-        (point_rd.GetX(), point_rd.GetY()),
-        (point.GetX(), point.GetY()),
+        (x_rd, y_rd),
+        (lon, lat),
     )
 
 
@@ -84,12 +78,13 @@ def get_buildings_in_range(observer, radius):
     """
     For a panoramic image, get the buildings that are whitin a user defined range.
     """
-    bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie%5Bwithin%5D=POINT%28{observer[0]}+{observer[1]}%29%2C{radius}"
+    bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie[within]=POINT({observer[0]} {observer[1]}),{radius}"
 
     with requests.get(bag_url, timeout=API_TIMEOUT) as response:
         bag_data = json.loads(response.content)["_embedded"]["panden"]
 
     return bag_data
+
 
 def get_building_polygons(pand_json):
     """ Get the polygon of a building """
@@ -119,3 +114,4 @@ def download_pano_image(pano_url):
         return
 
     return source_image
+    
