@@ -4,15 +4,37 @@ Amsterdam API description: https://api.data.amsterdam.nl/api/
 
 import json
 from io import BytesIO
+from typing import Any
 
 import requests
 from PIL import Image
 from pyproj import Transformer
 
 API_TIMEOUT = 10
+RETRY_ATTEMPTS = 5
 
 # WGS84 (EPSG:4326, lon/lat) to Rijksdriehoek (EPSG:28992, metres); always_xy keeps the order (lon, lat) / (x, y)
 wgs84_to_rd = Transformer.from_crs("EPSG:4326", "EPSG:28992", always_xy=True)
+
+
+def get_request(url: str, load_json: bool = True) -> Any:
+    attempt = 1
+    while attempt <= RETRY_ATTEMPTS:
+        try:
+            with requests.get(url, timeout=API_TIMEOUT) as response:
+                if load_json:
+                    return json.loads(response.content)
+                else:
+                    return response.content
+        except requests.exceptions.ReadTimeout as e:
+            if attempt < RETRY_ATTEMPTS:
+                attempt += 1
+                print(
+                    f"{e} for {url}, trying again (attempt {attempt}/{RETRY_ATTEMPTS}).."
+                )
+                continue
+            else:
+                raise e
 
 
 def get_pano_id(mission_year, bbox):
@@ -21,8 +43,7 @@ def get_pano_id(mission_year, bbox):
     """
     pano_url = f"https://api.data.amsterdam.nl/panorama/panoramas/?tags=mission-{mission_year}&bbox={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}&srid=28992"
 
-    with requests.get(pano_url, timeout=API_TIMEOUT) as response:
-        pano_data_all = json.loads(response.content)
+    pano_data_all = get_request(pano_url)
 
     pano_data = pano_data_all["_embedded"]["panoramas"]
 
@@ -35,8 +56,7 @@ def get_pano_id(mission_year, bbox):
 
     # Exit the while loop if there is no next page
     while next_page:
-        with requests.get(next_page, timeout=API_TIMEOUT) as response:
-            pano_data_all = json.loads(response.content)
+        pano_data_all = get_request(next_page)
 
         pano_data = pano_data_all["_embedded"]["panoramas"]
 
@@ -56,8 +76,7 @@ def get_pano_image(pano_id):
     from WGS84 (EPSG:4326) to Rijksdriehoek (EPSG:28992)
     """
     pano_url = f"https://api.data.amsterdam.nl/panorama/panoramas/{pano_id}/"
-    with requests.get(pano_url, timeout=API_TIMEOUT) as response:
-        pano_data = json.loads(response.content)
+    pano_data = get_request(pano_url)
 
     geom = pano_data["geometry"]["coordinates"]
 
@@ -81,11 +100,7 @@ def get_buildings_in_range(observer, radius):
     range.
     """
     bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie[within]=POINT({observer[0]} {observer[1]}),{radius}"
-
-    with requests.get(bag_url, timeout=API_TIMEOUT) as response:
-        bag_data = json.loads(response.content)["_embedded"]["panden"]
-
-    return bag_data
+    return get_request(bag_url)["_embedded"]["panden"]
 
 
 def get_building_polygons(pand_json):
@@ -109,11 +124,5 @@ def get_building_polygons(pand_json):
 
 def download_pano_image(pano_url):
     """Download a panoramic image from the API"""
-    try:
-        response = requests.get(pano_url, timeout=API_TIMEOUT)
-        source_image = Image.open(BytesIO(response.content))
-    except requests.exceptions.RequestException:
-        print("HTTP Request failed. Aborting.")
-        return
-
-    return source_image
+    response_content = get_request(pano_url, load_json=False)
+    return Image.open(BytesIO(response_content))
