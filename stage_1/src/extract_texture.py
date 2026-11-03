@@ -7,8 +7,9 @@ from math import atan2, pi
 
 from numpy import float64, full, int32, linspace, meshgrid
 from PIL import Image
-from src.array_image import get_as_rgb_array, sample_rgb_array_image_as_array
-from src.array_math import (
+
+from stage_1.src.array_image import get_as_rgb_array, sample_rgb_array_image_as_array
+from stage_1.src.array_math import (
     cartesian2cylindrical,
     get_midpoint,
     get_vector,
