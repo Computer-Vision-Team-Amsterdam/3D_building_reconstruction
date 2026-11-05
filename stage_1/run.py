@@ -34,6 +34,7 @@ MIN_DISTANCE = 1.7  # Min distance camera to building
 MAX_DISTANCE = 9
 MIN_BUILDING_AREA = 15
 MAX_BUILDING_AREA = 400
+MIN_FACADE_LENGTH = 1.0
 
 IMAGES_OUTPUT = "texture_output/"
 OUTPUT_NAME = "output_stage1"
@@ -81,6 +82,7 @@ def main():
         max_building_area=MAX_BUILDING_AREA,
         min_building_distance=MIN_DISTANCE,
         max_building_distance=MAX_DISTANCE,
+        min_facade_length=MIN_FACADE_LENGTH,
         building_search_radius=SEARCH_RADIUS,
     )
 

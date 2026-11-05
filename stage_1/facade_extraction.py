@@ -1,13 +1,8 @@
 import pandas as pd
-import shapely.geometry
+import shapely.geometry as sg
+from shapely import get_coordinates, simplify
 
-from stage_1.src import (
-    api_request,
-    array_math,
-    extract_texture,
-    furthest_pair,
-    visible_view,
-)
+from stage_1.src import api_request, array_math, extract_texture, visible_view
 
 
 class FacadeExtractor:
@@ -22,7 +17,9 @@ class FacadeExtractor:
         max_building_area: float = 400.0,
         min_building_distance: float = 1.7,
         max_building_distance: float = 9.0,
+        min_facade_length: float = 1.0,
         building_search_radius: float = 10.0,
+        building_simplifaction_tolerance: float = 0.1,
     ):
         self.texture_output_folder = texture_output_folder
         self.camera_height = camera_height
@@ -32,17 +29,23 @@ class FacadeExtractor:
         self.max_building_area = max_building_area
         self.min_building_distance = min_building_distance
         self.max_building_distance = max_building_distance
+        self.min_facade_length = min_facade_length
         self.building_search_radius = building_search_radius
+        self.building_simplifaction_tolerance = building_simplifaction_tolerance
 
     def get_admissible_data(self, observer, building_polygons):
         """
         Validate the GPS location of a panoramic image and the size of a building.
         """
-        observer_point = shapely.geometry.Point(observer)
+        observer_point = sg.Point(observer)
 
         admissible_building_polygons = {}
         for k, v in list(building_polygons.items()):
-            building_poly = shapely.geometry.Polygon(v)
+            building_poly = simplify(
+                geometry=sg.Polygon(v),
+                tolerance=self.building_simplifaction_tolerance,
+                preserve_topology=True,
+            )
 
             # Check if point q is too close to a building
             if (
@@ -59,44 +62,48 @@ class FacadeExtractor:
 
             # Check for building area sizes that we ignore (Too large: Bijenkorf, too small: mini snackbar)
             if self.min_building_area < building_poly.area < self.max_building_area:
-                admissible_building_polygons[k] = v
+                admissible_building_polygons[k] = get_coordinates(
+                    building_poly
+                ).tolist()
 
         return admissible_building_polygons
 
     def get_facade_coordinates(
-        self, building_polygons, visibility_polygon, observer, image_url, facade_data
+        self,
+        building_polygons,
+        visibility_polygon,
+        pano_id,
+        observer,
+        image_url,
+        facade_data,
     ):
         """Get the two most distant visible points of a building."""
         for pand_id in building_polygons.keys():
             new_data = {}
 
             # Get all the points from this polygon that are in the visibility polygon
-            visible_points = visible_view.point_in_visibility_polygon(
-                building_polygons[pand_id], visibility_polygon
+            visible_segments = visible_view.segments_in_visibility_polygon(
+                building_polygons[pand_id], visibility_polygon, observer
             )
 
-            # Check if there are two or more visible points for a building
-            if len(visible_points) >= 2:
-                # Get from a list of items the furthest pair where we keep the (winding) order of the list
-                visible_points_left_right = furthest_pair.get_furthest_pair(
-                    visible_points, observer
-                )
+            # If there are fewer than two visible points for a building we skip (no facade)
+            if len(visible_segments) == 0:
+                continue
 
-                # Two validation checks
+            for segment in visible_segments:
+                new_data = dict()
 
                 # Calculate the distance between two points
-                vector_facade = array_math.vector(
-                    visible_points_left_right[0], visible_points_left_right[1]
-                )
+                vector_facade = array_math.vector(segment[0], segment[1])
                 facade_length = array_math.vector_length(vector_facade)
 
                 # Validation 1. The length of a "normal" facade is at least more than 2 meters
-                if facade_length < 2:
+                if facade_length < self.min_facade_length:
                     # Go to next iteration of for loop, check for other buildings in same panorama
                     continue
 
                 # Distance observer to middlepoint
-                midpoint = array_math.get_midpoint(visible_points_left_right)
+                midpoint = array_math.get_midpoint(segment)
                 vector_distance = array_math.vector(midpoint, observer)
                 new_data["distance"] = round(
                     array_math.vector_length(vector_distance), 6
@@ -109,10 +116,9 @@ class FacadeExtractor:
 
                 # Fill dict after all the validation checks
                 new_data["pand_id"] = str(pand_id)
-                new_data["visible_point_one"] = tuple(
-                    visible_points_left_right[0]
-                )  # TODO why a tuple
-                new_data["visible_point_two"] = tuple(visible_points_left_right[1])
+                new_data["visible_point_one"] = tuple(segment[0])  # TODO why a tuple
+                new_data["visible_point_two"] = tuple(segment[1])
+                new_data["pano_id"] = pano_id
                 new_data["pano_image_url"] = image_url
                 new_data["observer"] = observer
                 # The distance value makes the filename unique
@@ -156,7 +162,12 @@ class FacadeExtractor:
 
             # Get two most distant visible points of a builing
             self.get_facade_coordinates(
-                building_polygons, visibility_polygon, observer, image_url, facade_data
+                building_polygons,
+                visibility_polygon,
+                pano_id,
+                observer,
+                image_url,
+                facade_data,
             )
 
     def extract_facade_texture(self, df: pd.DataFrame):

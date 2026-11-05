@@ -92,7 +92,63 @@ def draw_arrangement(arr, vx, q, save_file=False):
 def point_in_visibility_polygon(building_poly, visibility_polygon):
     """Keep building vertices that are inside or on the visibility polygon"""
     visible_points = []
-    for x, y in building_poly:
+    for x, y in building_poly[0:-1]:
         if visibility_polygon.distance(Point(x, y)) <= TOL:
             visible_points.append([x, y])
     return visible_points
+
+
+# Direction of the observer
+def direction_of_observer(segment, observer):
+    """
+    Determine direction of point from line segment
+
+    Code is inspired by geeksforgeeks.org/direction-point-line-segment/
+    """
+
+    # A at the left side and B at the right, sort list on y-axis.
+    segment = sorted(segment, key=lambda k: [k[1], k[0]])
+
+    # Select two points from the sorted list
+    aX = segment[0][0]
+    aY = segment[0][1]
+    bX = segment[1][0]
+    bY = segment[1][1]
+
+    # Subtracting co-ordinates of point A from B and P, to make A as origin
+    bX = bX - aX
+    bY = bY - aY
+    pX = observer[0] - aX
+    pY = observer[1] - aY
+
+    # Determine the cross product
+    cross_product = (bX * pY) - (bY * pX)
+
+    return cross_product
+
+
+# Which building segments are visible
+def segments_in_visibility_polygon(building_poly, visibility_polygon, observer):
+    """Keep building vertices that are inside or on the visibility polygon"""
+    segments = []
+
+    # Loop over segments
+    for idx_start in range(len(building_poly) - 1):
+        segment = building_poly[idx_start : idx_start + 2]
+
+        # Check if both points of the segment are visible
+        if (
+            visibility_polygon.distance(Point(segment[0][0], segment[0][1])) <= TOL
+        ) and (visibility_polygon.distance(Point(segment[1][0], segment[1][1])) <= TOL):
+            # Determine the direction of the observer from the line segment
+            # Lies the observer to the Right of Line Segment or to the Left of Line Segment.
+            cross_product = direction_of_observer(segment, observer)
+
+            # Observer is on the right of line segment if cross product is positive
+            if cross_product > 0:
+                # Reverse the two points
+                segment = [segment[1], segment[0]]
+
+            segments.append(segment)
+
+    return segments
