@@ -26,13 +26,14 @@ PANO_HEIGHT = 2000  # pixels
 
 
 # Funtion that projects each facade grid point onto the panorama and samples the colours. Facades that are not forward facing, or are viewed at too "tilted" angle, become a grey placeholder, unless `force=True`
-def project_facade(facade, observer, source_file, img_height, resolution, force=False):
+def project_facade(facade, observer, source_file, img_height, resolution, force=True):
     nx = int(round(facade["length"] * resolution))
     if nx > 0:
         # Gets the distances to facades with observer as middlepoint
-        if not facade["forward_facing"] or (
-            not 0.7 * pi > facade["viewing_angle"] > 0.3 * pi and not force
-        ):
+        if (
+            not facade["forward_facing"]
+            or (not 0.7 * pi > facade["viewing_angle"] > 0.3 * pi)
+        ) and not force:
             imarray = full((img_height, nx, 3), 128, dtype=int32)
         else:
             # 3D tuple of the vector
