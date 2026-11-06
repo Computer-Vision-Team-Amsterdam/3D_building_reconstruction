@@ -30,6 +30,8 @@ dependencies = [
 dev = [
     "ipykernel==6.*",
     "ipywidgets",
+    "folium>=0.12",
+    "mapclassify",
     "matplotlib>=3.7",
     "nbstripout>=0.7.1",
     "pre-commit>=3.2.0",
