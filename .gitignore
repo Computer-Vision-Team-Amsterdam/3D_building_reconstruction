@@ -226,3 +226,5 @@ uv.lock
 *.png
 texture_output*
 *.zip
+*.csv
+*.gpkg
