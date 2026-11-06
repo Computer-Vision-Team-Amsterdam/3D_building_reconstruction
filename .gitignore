@@ -224,7 +224,9 @@ uv.lock
 *.jpg
 *.jpeg
 *.png
-texture_output*
 *.zip
 *.csv
 *.gpkg
+*.html
+texture_output*
+model_weights/
