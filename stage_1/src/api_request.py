@@ -4,7 +4,7 @@ Amsterdam API description: https://api.data.amsterdam.nl/api/
 
 import json
 from io import BytesIO
-from typing import Any
+from typing import Any, Tuple
 
 import requests
 from PIL import Image
@@ -120,6 +120,23 @@ def get_building_polygons(pand_json):
             building_polygons[pand_id] = pand_polygon
 
     return building_polygons
+
+
+def get_height_for_id(bag_id: str) -> Tuple[float, float]:
+    "Query the 3DBAG api for the given ID and return ground elevation and building height in meters."
+
+    full_bag_id_str = f"NL.IMBAG.Pand.{bag_id}"
+    url = f"https://api.3dbag.nl/collections/pand/items/{full_bag_id_str}"
+
+    json_data = get_request(url=url, load_json=True)
+
+    ground_elevation = json_data["feature"]["CityObjects"][full_bag_id_str][
+        "attributes"
+    ]["b3_h_maaiveld"]
+    building_height = json_data["feature"]["CityObjects"][full_bag_id_str][
+        "attributes"
+    ]["b3_h_dak_max"]
+    return (ground_elevation, building_height)
 
 
 def download_pano_image(pano_url):

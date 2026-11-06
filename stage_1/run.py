@@ -26,7 +26,6 @@ SEARCH_RADIUS = 10  # Building search radius from an initial panoramic image loc
 
 # Texture options
 TEXTURE_RESOLUTION = 30
-IMAGE_HEIGHT_IRL = 30  # In meters, buildings above 30m are therefore partly cropped
 CAMERA_HEIGHT = 2  # Height of the camera mounted on the car
 
 # Validation options before rectification (strict settings)
@@ -76,7 +75,6 @@ def main():
     facade_extractor = FacadeExtractor(
         texture_output_folder=IMAGES_OUTPUT,
         camera_height=CAMERA_HEIGHT,
-        image_height_irl=IMAGE_HEIGHT_IRL,
         texture_resolution=TEXTURE_RESOLUTION,
         min_building_area=MIN_BUILDING_AREA,
         max_building_area=MAX_BUILDING_AREA,

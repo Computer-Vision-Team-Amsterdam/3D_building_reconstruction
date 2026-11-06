@@ -11,7 +11,6 @@ class FacadeExtractor:
         self,
         texture_output_folder: str,
         camera_height: float = 2.0,
-        image_height_irl: float = 30.0,
         texture_resolution: int = 30,
         min_building_area: float = 15.0,
         max_building_area: float = 400.0,
@@ -23,7 +22,6 @@ class FacadeExtractor:
     ):
         self.texture_output_folder = texture_output_folder
         self.camera_height = camera_height
-        self.image_height_irl = image_height_irl
         self.texture_resolution = texture_resolution
         self.min_building_area = min_building_area
         self.max_building_area = max_building_area
@@ -90,6 +88,9 @@ class FacadeExtractor:
             if len(visible_segments) == 0:
                 continue
 
+            ground_elevation, building_height = api_request.get_height_for_id(pand_id)
+            texture_height_irl = building_height - ground_elevation
+
             for segment in visible_segments:
                 new_data = dict()
 
@@ -121,6 +122,7 @@ class FacadeExtractor:
                 new_data["pano_id"] = pano_id
                 new_data["pano_image_url"] = image_url
                 new_data["observer"] = observer
+                new_data["texture_height_irl"] = texture_height_irl
                 # The distance value makes the filename unique
                 new_data["texture_filename"] = (
                     str(pand_id) + "_" + str(new_data["distance"])
@@ -184,7 +186,7 @@ class FacadeExtractor:
                     image_file = extract_texture.export_line_to_texture(
                         (row["visible_point_one"], row["visible_point_two"]),
                         self.texture_resolution,
-                        self.image_height_irl,
+                        row["texture_height_irl"],
                         self.camera_height,
                         source_image,
                         row["observer"],
