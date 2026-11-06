@@ -147,7 +147,8 @@ def segments_in_visibility_polygon(building_poly, visibility_polygon, observer):
             # Observer is on the right of line segment if cross product is positive
             if cross_product > 0:
                 # Reverse the two points
-                segment = [segment[1], segment[0]]
+                # segment = [segment[1], segment[0]]
+                pass  # TODO looks like this is not needed, requires further testing
 
             segments.append(segment)
 
