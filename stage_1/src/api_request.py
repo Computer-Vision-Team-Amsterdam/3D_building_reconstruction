@@ -7,6 +7,7 @@ from io import BytesIO
 from typing import Any, Tuple
 
 import requests
+import shapely
 from PIL import Image
 from pyproj import Transformer
 
@@ -37,7 +38,7 @@ def get_request(url: str, load_json: bool = True) -> Any:
                 raise e
 
 
-def get_pano_id(mission_year, bbox):
+def get_pano_id(mission_year, bbox, target_area=None):
     """
     Get panoramic image id's for a user defined bounding box region
     """
@@ -49,6 +50,13 @@ def get_pano_id(mission_year, bbox):
 
     pano_id = []
     for item in pano_data:
+        pano_point = shapely.transform(
+            geometry=shapely.from_geojson(json.dumps(item["geometry"])),
+            transformation=wgs84_to_rd.transform,
+            interleaved=False,
+        )
+        if (target_area is not None) and (not pano_point.intersects(target_area)):
+            continue
         pano_id.append(item["pano_id"])
 
     # Check for next page with data
@@ -62,6 +70,13 @@ def get_pano_id(mission_year, bbox):
 
         # Append the panorama id's to the list
         for item in pano_data:
+            pano_point = shapely.transform(
+                geometry=shapely.from_geojson(json.dumps(item["geometry"])),
+                transformation=wgs84_to_rd.transform,
+                interleaved=False,
+            )
+            if (target_area is not None) and (not pano_point.intersects(target_area)):
+                continue
             pano_id.append(item["pano_id"])
 
         # Check for next page
