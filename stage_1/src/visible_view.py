@@ -34,13 +34,6 @@ def generate_arrangement(observer, building_polygons):
     return np.array(segments, dtype=float)
 
 
-def points_2_edges(pts):
-    """Make edges"""
-    return [
-        (pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1]) for i in range(1, len(pts))
-    ]
-
-
 # Visibility polygon: casts a ray from the observer towards every segment endpoint, plus a small offset to either side, and keeps the nearest hit for each ray. The hit points form the visibility polygon
 def get_visibility_polygon(arr, observer):
     """Visibility polygon from the observer via ray casting against all
@@ -86,16 +79,6 @@ def draw_arrangement(arr, vx, q, save_file=False):
     plt.plot(xs, ys, "r:")
     plt.scatter(q[0], q[1], color="b")
     plt.savefig("vispol.png") if save_file else plt.show()
-
-
-# Which building vertices are visible
-def point_in_visibility_polygon(building_poly, visibility_polygon):
-    """Keep building vertices that are inside or on the visibility polygon"""
-    visible_points = []
-    for x, y in building_poly[0:-1]:
-        if visibility_polygon.distance(Point(x, y)) <= TOL:
-            visible_points.append([x, y])
-    return visible_points
 
 
 # Direction of the observer
