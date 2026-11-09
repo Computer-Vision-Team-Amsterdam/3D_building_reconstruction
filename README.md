@@ -1,3 +1,21 @@
+# DEV version 2026-11-09
+
+**NOTE on DEV branch**: this version of the code ONLY updates `stage_1`, the facade extraction part. We do not guarantee the correct working of `stage_2` and `stage_3`. In fact, we guarantee that `stage_2` does not work, since the model weights for Detectron are missing. However, see the notebook [semantic_segmentation.ipynb](./notebooks/semantic_segmentation.ipynb) for an idea how to process using a modern semantic segmentation model.
+
+Installation: 
+```
+uv venv --python 3.14
+uv pip install -r pyproject.toml [--extra "dev,yolo"]
+```
+
+Running `stage_1`:
+```
+python stage_1/run.py
+```
+or use the notebook [process_target_areas.ipynb](./notebooks/process_target_areas.ipynb).
+
+--- OLD README from here ---
+
 # Extraction of façade details from street-view panoramic images and integration in a 3D city model
 
 In this repository, a method is presented to automatically enhance Level Of Detail 2 buildings in a 3D city model with window and door geometries, by using a panoramic image sequence. The figure below shows a schematic overview of the proposed method, a **three staged pipeline**. The first stage is based on identifying, rectifying and extracting the texture region of a building from a panoramic image sequence. In the next stage, the extracted façade texture images are used as input in a deep convolutional neural network for parsing façade details, such as windows and doors. In the third and final stage of the pipeline, the previously parsed window and door rectangles are aligned with the input LOD2 model to construct a LOD3 model. More on https://medium.com/@chrise96/a-deep-learning-approach-to-enhance-3d-city-models-caba7b2073d6. 
