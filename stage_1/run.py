@@ -10,9 +10,6 @@ correspond to each of the panoramic images.
 NOTE: Change the variables BBOX_REGION and MISSION_YEAR to your own settings!
 """
 
-import os
-import time
-
 import shapely.geometry as sg
 
 # External Python files
@@ -53,17 +50,6 @@ def main():
     panoramic image sequence.
     """
 
-    # Create a directory, first check if it already exists
-    if not os.path.exists(IMAGES_OUTPUT):
-        os.makedirs(IMAGES_OUTPUT)
-    else:
-        print("The 'texture_output' folder already exists.")
-
-    print("--- Start ---")
-
-    # Start timer
-    start_time = time.time()
-
     target_area = sg.box(*BBOX_REGION)
 
     facade_extractor = FacadeExtractor(
@@ -80,29 +66,9 @@ def main():
         building_search_radius=SEARCH_RADIUS,
     )
 
-    print("Step 1: Gather metadata for buildings and panoramas in target area.")
-    facade_extractor.gather_data()
+    facade_df = facade_extractor.run()
 
-    print("Step 2: Identify visible building edges in range of a panorama images.")
-    facade_df = facade_extractor.get_visible_building_edges()
-
-    print("Step 3: Drop duplicate facade textures.")
-    # Drop duplicate facade rows, keep the ones with shortest distance.
-    facade_df = (
-        facade_df.sort_values("distance", ascending=True)
-        .drop_duplicates(subset=["visible_point_one", "visible_point_two"])
-        .sort_index()
-        .reset_index(drop=True)
-    )
-
-    print("Step 4: Extract facade textures from panoramic images.")
-    # Group by image_url and later iterate over dataframe grouped by image_url
-    facade_extractor.extract_facade_texture(facade_df)
-
-    print("Step 5: Save the results.")
     save_results(facade_df)
-
-    print("--- %s seconds ---" % (time.time() - start_time))
 
 
 if __name__ == "__main__":

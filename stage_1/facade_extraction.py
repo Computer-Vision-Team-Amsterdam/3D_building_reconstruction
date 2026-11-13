@@ -1,3 +1,5 @@
+import os
+import time
 from typing import Any, Dict, List, Optional
 
 import geopandas as gpd
@@ -37,6 +39,41 @@ class FacadeExtractor:
         self.building_search_radius = building_search_radius
         self.building_simplifaction_tolerance = building_simplifaction_tolerance
         self.state = 0
+
+        if not os.path.exists(self.texture_output_folder):
+            os.makedirs(self.texture_output_folder)
+        else:
+            print(
+                f"Warning: 'texture_output_folder' {self.texture_output_folder} already exists."
+            )
+
+    def run(self) -> pd.DataFrame:
+        print("--- Start ---")
+
+        # Start timer
+        start_time = time.time()
+
+        print("Step 1: Gather metadata for buildings and panoramas in target area.")
+        self.gather_data()
+
+        print("Step 2: Identify visible building edges in range of a panorama images.")
+        facade_df = self.get_visible_building_edges()
+
+        print("Step 3: Drop duplicate facade textures.")
+        # Drop duplicate facade rows, keep the ones with shortest distance.
+        facade_df = (
+            facade_df.sort_values("distance", ascending=True)
+            .drop_duplicates(subset=["visible_point_one", "visible_point_two"])
+            .sort_index()
+            .reset_index(drop=True)
+        )
+
+        print("Step 4: Extract facade textures from panoramic images.")
+        self.extract_facade_texture(facade_df)
+
+        print(f"--- {(time.time() - start_time):.2f} seconds ---")
+
+        return facade_df
 
     def gather_data(self) -> None:
         print("Gathering building metadata in target area...")
