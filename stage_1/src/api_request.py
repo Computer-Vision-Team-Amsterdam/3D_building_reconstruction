@@ -1,21 +1,29 @@
 """
 Amsterdam API description: https://api.data.amsterdam.nl/api/
+3DBAG API description: https://api.3dbag.nl/api.html
 """
 
 import json
+from datetime import datetime
 from io import BytesIO
-from typing import Any, Tuple
+from typing import Any, Dict, List, Optional
 
+import geopandas as gpd
+import pandas as pd
 import requests
 import shapely
-from PIL import Image
+from PIL import Image, ImageFile
 from pyproj import Transformer
 
 API_TIMEOUT = 10
 RETRY_ATTEMPTS = 5
 
-# WGS84 (EPSG:4326, lon/lat) to Rijksdriehoek (EPSG:28992, metres); always_xy keeps the order (lon, lat) / (x, y)
-wgs84_to_rd = Transformer.from_crs("EPSG:4326", "EPSG:28992", always_xy=True)
+WGS84_EPSG = 4326
+RD_EPSG = 28992
+
+rd_to_wgs84 = Transformer.from_crs(
+    crs_from=RD_EPSG, crs_to=WGS84_EPSG, always_xy=True
+).transform
 
 
 def get_request(url: str, load_json: bool = True) -> Any:
@@ -38,123 +46,154 @@ def get_request(url: str, load_json: bool = True) -> Any:
                 raise e
 
 
-def get_pano_id(mission_year, bbox, target_area=None):
+def get_buildings_in_area(target_area: shapely.Geometry) -> gpd.GeoDataFrame:
     """
-    Get panoramic image id's for a user defined bounding box region
+    Query the BAG api for all buildings that intersect with the given target shape. Note: target shape is expected to be in Amersfoort / RD New format.
     """
-    pano_url = f"https://api.data.amsterdam.nl/panorama/panoramas/?tags=mission-{mission_year}&bbox={bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}&srid=28992"
-
-    pano_data_all = get_request(pano_url)
-
-    pano_data = pano_data_all["_embedded"]["panoramas"]
-
-    pano_id = []
-    for item in pano_data:
-        pano_point = shapely.transform(
-            geometry=shapely.from_geojson(json.dumps(item["geometry"])),
-            transformation=wgs84_to_rd.transform,
-            interleaved=False,
-        )
-        if (target_area is not None) and (not pano_point.intersects(target_area)):
-            continue
-        pano_id.append(item["pano_id"])
-
-    # Check for next page with data
-    next_page = pano_data_all["_links"]["next"]["href"]
-
-    # Exit the while loop if there is no next page
-    while next_page:
-        pano_data_all = get_request(next_page)
-
-        pano_data = pano_data_all["_embedded"]["panoramas"]
-
-        # Append the panorama id's to the list
-        for item in pano_data:
-            pano_point = shapely.transform(
-                geometry=shapely.from_geojson(json.dumps(item["geometry"])),
-                transformation=wgs84_to_rd.transform,
-                interleaved=False,
-            )
-            if (target_area is not None) and (not pano_point.intersects(target_area)):
-                continue
-            pano_id.append(item["pano_id"])
-
-        # Check for next page
-        next_page = pano_data_all["_links"]["next"]["href"]
-
-    return pano_id
-
-
-def get_pano_image(pano_id):
-    """
-    Get a panoramic image and its initial location coordinates and convert it
-    from WGS84 (EPSG:4326) to Rijksdriehoek (EPSG:28992)
-    """
-    pano_url = f"https://api.data.amsterdam.nl/panorama/panoramas/{pano_id}/"
-    pano_data = get_request(pano_url)
-
-    geom = pano_data["geometry"]["coordinates"]
-
-    # WGS84 to Rijksdriehoek (RD) conversion
-    lon, lat = geom[0], geom[1]
-    x_rd, y_rd = wgs84_to_rd.transform(lon, lat)
-
-    # Get image_url from API
-    image_url = pano_data["_links"]["equirectangular_medium"]["href"]
-
-    return (
-        str(image_url),
-        (x_rd, y_rd),
-        (lon, lat),
+    bag_gdf = get_bag_buildings_in_area(target_area=target_area)
+    bag3d_df = get_3dbag_buildings_in_area(target_area=target_area)
+    return bag_gdf.join(
+        other=bag3d_df.set_index("bag_id"),
+        on="bag_id",
+        how="left",
     )
 
 
-def get_buildings_in_range(observer, radius):
-    """
-    For a panoramic image, get the buildings that are within a user defined
-    range.
-    """
-    bag_url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie[within]=POINT({observer[0]} {observer[1]}),{radius}"
-    return get_request(bag_url)["_embedded"]["panden"]
+def get_bag_buildings_in_area(target_area: shapely.Geometry) -> gpd.GeoDataFrame:
+    date_str = datetime.today().strftime("%Y-%m-%d")  # TODO base this on MISSION_YEAR?
+    target_area_wgs84 = shapely.transform(target_area, rd_to_wgs84, interleaved=False)
+    url = f"https://api.data.amsterdam.nl/v1/bag/v1/panden?geometrie%5Bintersects%5D={target_area_wgs84.wkt}&geldigOp={date_str}"
 
-
-def get_building_polygons(pand_json):
-    """Get the polygon of a building"""
-    building_polygons = {}
-
-    # Loop over json content
-    for item in pand_json:
-        pand_id = item["identificatie"]
-        pand_polygon = item["geometrie"]["coordinates"][0]
-
-        # A polygon should have at least 3 vertices to be a valid polygon
-        if len(pand_polygon) > 2 and pand_id:
-            # Verify counter-clockwise winding order
-            # TODO (Removed this because it happens rarely and slows the process down)
-
-            building_polygons[pand_id] = pand_polygon
-
-    return building_polygons
-
-
-def get_height_for_id(bag_id: str) -> Tuple[float, float]:
-    "Query the 3DBAG api for the given ID and return ground elevation and building height in meters."
-
-    full_bag_id_str = f"NL.IMBAG.Pand.{bag_id}"
-    url = f"https://api.3dbag.nl/collections/pand/items/{full_bag_id_str}"
+    dfs = []
 
     json_data = get_request(url=url, load_json=True)
 
-    ground_elevation = json_data["feature"]["CityObjects"][full_bag_id_str][
-        "attributes"
-    ]["b3_h_maaiveld"]
-    building_height = json_data["feature"]["CityObjects"][full_bag_id_str][
-        "attributes"
-    ]["b3_h_dak_max"]
-    return (ground_elevation, building_height)
+    dfs.append(_parse_bag_response(json_data=json_data))
+    next_page_url = _get_next_page_ams(links=json_data["_links"])
+
+    while next_page_url is not None:
+        json_data = get_request(url=next_page_url, load_json=True)
+        dfs.append(_parse_bag_response(json_data=json_data))
+        next_page_url = _get_next_page_ams(links=json_data["_links"])
+
+    return pd.concat(dfs, ignore_index=True)
 
 
-def download_pano_image(pano_url):
+def get_3dbag_buildings_in_area(target_area: shapely.Geometry) -> pd.DataFrame:
+    minx, miny, maxx, maxy = target_area.bounds
+    url = f"https://api.3dbag.nl/collections/pand/items?bbox={minx},{miny},{maxx},{maxy}&limit=100"
+
+    dfs = []
+
+    json_data = get_request(url=url, load_json=True)
+
+    dfs.append(_parse_3dbag_response(json_data=json_data))
+    next_page_url = _get_next_page_3dbag(links=json_data["links"])
+
+    while next_page_url is not None:
+        json_data = get_request(url=next_page_url, load_json=True)
+        dfs.append(_parse_3dbag_response(json_data=json_data))
+        next_page_url = _get_next_page_3dbag(links=json_data["links"])
+
+    return pd.concat(dfs, ignore_index=True)
+
+
+def get_panos_in_area(
+    target_area: shapely.Geometry, mission_year: int, image_quality: str = "medium"
+) -> gpd.GeoDataFrame:
+    """
+    Get panoramic image id's for a user defined bounding box region
+    """
+    minx, miny, maxx, maxy = target_area.bounds
+    url = f"https://api.data.amsterdam.nl/panorama/panoramas/?tags=mission-{mission_year}&bbox={minx},{miny},{maxx},{maxy}&srid=28992"
+
+    dfs = []
+
+    json_data = get_request(url=url, load_json=True)
+
+    dfs.append(
+        _parse_panorama_response(json_data=json_data, image_quality=image_quality)
+    )
+    next_page_url = _get_next_page_ams(links=json_data["_links"])
+
+    while next_page_url is not None:
+        json_data = get_request(url=next_page_url, load_json=True)
+        dfs.append(
+            _parse_panorama_response(json_data=json_data, image_quality=image_quality)
+        )
+        next_page_url = _get_next_page_ams(links=json_data["_links"])
+
+    pano_gdf = pd.concat(dfs, ignore_index=True)
+
+    return pano_gdf[pano_gdf.intersects(target_area)]
+
+
+def download_pano_image(pano_url: str) -> ImageFile:
     """Download a panoramic image from the API"""
     response_content = get_request(pano_url, load_json=False)
     return Image.open(BytesIO(response_content))
+
+
+def _parse_bag_response(json_data: Dict) -> gpd.GeoDataFrame:
+    data: Dict[str, List] = {
+        "bag_id": [],
+        "geometry": [],
+    }
+
+    for pand in json_data["_embedded"]["panden"]:
+        data["bag_id"].append(pand["identificatie"])
+        data["geometry"].append(shapely.from_geojson(json.dumps(pand["geometrie"])))
+
+    return gpd.GeoDataFrame(data=data, crs=RD_EPSG)
+
+
+def _parse_3dbag_response(json_data: Dict) -> pd.DataFrame:
+    data: Dict[str, List] = {
+        "bag_id": [],
+        "ground_elevation": [],
+        "building_height": [],
+    }
+    for pand in json_data["features"]:
+        id = pand["id"]
+        data["bag_id"].append(id.strip("NL.IMBAG.Pand."))
+        data["ground_elevation"].append(
+            pand["CityObjects"][id]["attributes"]["b3_h_maaiveld"]
+        )
+        data["building_height"].append(
+            pand["CityObjects"][id]["attributes"]["b3_h_dak_max"]
+        )
+    return pd.DataFrame(data=data)
+
+
+def _parse_panorama_response(
+    json_data: Dict, image_quality: str = "medium"
+) -> gpd.GeoDataFrame:
+    data: Dict[str, List] = {
+        "pano_id": [],
+        "image_url": [],
+        "timestamp": [],
+        "geometry": [],
+    }
+    for pano in json_data["_embedded"]["panoramas"]:
+        data["pano_id"].append(pano["pano_id"])
+        data["image_url"].append(
+            pano["_links"][f"equirectangular_{image_quality}"]["href"]
+        )
+        data["timestamp"].append(pd.to_datetime(pano["timestamp"]))
+        data["geometry"].append(shapely.from_geojson(json.dumps(pano["geometry"])))
+
+    return gpd.GeoDataFrame(data=data, crs=WGS84_EPSG).to_crs(RD_EPSG)
+
+
+def _get_next_page_3dbag(links: List[Dict[str, str]]) -> Optional[str]:
+    for link in links:
+        if link["rel"] == "next":
+            return link["href"]
+    return None
+
+
+def _get_next_page_ams(links: Dict[str, Dict[str, Optional[str]]]) -> Optional[str]:
+    if "next" in links.keys():
+        return links["next"]["href"]
+    else:
+        return None

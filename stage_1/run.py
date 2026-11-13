@@ -13,14 +13,13 @@ NOTE: Change the variables BBOX_REGION and MISSION_YEAR to your own settings!
 import os
 import time
 
-import pandas as pd
+import shapely.geometry as sg
 
 # External Python files
 from stage_1.facade_extraction import FacadeExtractor
-from stage_1.src.api_request import get_pano_id
 
 # API options
-BBOX_REGION = [122300.00, 486628.78, 122400.00, 486475.48]
+BBOX_REGION = [122300.00, 486475.48, 122400.00, 486628.78]
 MISSION_YEAR = 2025  # API tag
 SEARCH_RADIUS = 10  # Building search radius from an initial panoramic image location
 
@@ -65,14 +64,11 @@ def main():
     # Start timer
     start_time = time.time()
 
-    # Get the panoramas (from API)
-    pano_ids = get_pano_id(MISSION_YEAR, BBOX_REGION)
-
-    print(f"Found {len(pano_ids)} panorama images")
-
-    print("Step 1: Identify visible building edges in range of a panoramic image")
+    target_area = sg.box(*BBOX_REGION)
 
     facade_extractor = FacadeExtractor(
+        target_area=target_area,
+        panorama_year=MISSION_YEAR,
         texture_output_folder=IMAGES_OUTPUT,
         camera_height=CAMERA_HEIGHT,
         texture_resolution=TEXTURE_RESOLUTION,
@@ -84,30 +80,27 @@ def main():
         building_search_radius=SEARCH_RADIUS,
     )
 
-    facade_data = list()
+    print("Step 1: Gather metadata for buildings and panoramas in target area.")
+    facade_extractor.gather_data()
 
-    facade_extractor.get_visible_building_edges(pano_ids, facade_data)
+    print("Step 2: Identify visible building edges in range of a panorama images.")
+    facade_df = facade_extractor.get_visible_building_edges()
 
-    print("Step 2: Drop duplicate facade textures")
-
-    # Create pandas dataframe to easily manipulate the data
-    df = pd.DataFrame(facade_data)
-
+    print("Step 3: Drop duplicate facade textures.")
     # Drop duplicate facade rows, keep the ones with shortest distance.
-    df = (
-        df.sort_values("distance", ascending=True)
+    facade_df = (
+        facade_df.sort_values("distance", ascending=True)
         .drop_duplicates(subset=["visible_point_one", "visible_point_two"])
         .sort_index()
         .reset_index(drop=True)
     )
 
-    print("Step 3: Extract facade textures from panoramic images")
-
+    print("Step 4: Extract facade textures from panoramic images.")
     # Group by image_url and later iterate over dataframe grouped by image_url
-    facade_extractor.extract_facade_texture(df)
+    facade_extractor.extract_facade_texture(facade_df)
 
-    print("Step 4: Save the results")
-    save_results(df)
+    print("Step 5: Save the results.")
+    save_results(facade_df)
 
     print("--- %s seconds ---" % (time.time() - start_time))
 

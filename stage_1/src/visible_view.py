@@ -9,18 +9,21 @@ environment. The function names and signatures are unchanged, `run.py` should
 work as before
 """
 
+from typing import List
+
 import numpy as np
+import numpy.typing as npt
 from shapely.geometry import Point, Polygon
 
 TOL = 1e-4  # metres, tolerance for "vertex lies on the visibility boundary"
 
 
 # Build the set of walls and building edges: replaces the `skgeom` arrangement with a plain `(n, 4)` array of segments `(x1, y1, x2, y2)`, including a square bounding box around the observer
-def generate_arrangement(observer, building_polygons):
+def generate_arrangement(observer: Point, polygons: List[Polygon]) -> npt.NDArray:
     """Collect all wall + building segments (replaces the skgeom arrangement)"""
     set_range = 60
-    lx, ly = observer[0] - set_range, observer[1] - set_range
-    rx, ry = observer[0] + set_range, observer[1] + set_range
+    lx, ly = observer.x - set_range, observer.y - set_range
+    rx, ry = observer.x + set_range, observer.y + set_range
 
     segments = [
         (lx, ly, lx, ry),
@@ -28,17 +31,23 @@ def generate_arrangement(observer, building_polygons):
         (rx, ry, rx, ly),
         (rx, ly, lx, ly),
     ]
-    for poly in building_polygons:
-        for i in range(1, len(poly)):
-            segments.append((poly[i - 1][0], poly[i - 1][1], poly[i][0], poly[i][1]))
+    for poly in polygons:
+        coords = np.array(poly.exterior.coords)
+        for i in range(1, len(coords)):
+            segments.append(
+                (coords[i - 1][0], coords[i - 1][1], coords[i][0], coords[i][1])
+            )
     return np.array(segments, dtype=float)
 
 
 # Visibility polygon: casts a ray from the observer towards every segment endpoint, plus a small offset to either side, and keeps the nearest hit for each ray. The hit points form the visibility polygon
-def get_visibility_polygon(arr, observer):
+def get_visibility_polygon(observer: Point, polygons: List[Polygon]):
     """Visibility polygon from the observer via ray casting against all
     segments"""
-    ox, oy = observer[0], observer[1]
+
+    arr = generate_arrangement(observer, polygons)
+
+    ox, oy = observer.x, observer.y
     p = arr[:, 0:2]  # segment starts (n,2)
     s = arr[:, 2:4] - arr[:, 0:2]  # segment vectors (n,2)
 
@@ -111,13 +120,17 @@ def direction_of_observer(segment, observer):
 
 
 # Which building segments are visible
-def segments_in_visibility_polygon(building_poly, visibility_polygon, observer):
+def segments_in_visibility_polygon(
+    building_poly: Polygon, visibility_polygon: Polygon, observer: Point
+):
     """Keep building vertices that are inside or on the visibility polygon"""
     segments = []
 
     # Loop over segments
-    for idx_start in range(len(building_poly) - 1):
-        segment = building_poly[idx_start : idx_start + 2]
+    building_coords = np.array(building_poly.exterior.coords)
+
+    for idx_start in range(len(building_coords) - 1):
+        segment = building_coords[idx_start : idx_start + 2]
 
         # Check if both points of the segment are visible
         if (
@@ -125,13 +138,13 @@ def segments_in_visibility_polygon(building_poly, visibility_polygon, observer):
         ) and (visibility_polygon.distance(Point(segment[1][0], segment[1][1])) <= TOL):
             # Determine the direction of the observer from the line segment
             # Lies the observer to the Right of Line Segment or to the Left of Line Segment.
-            cross_product = direction_of_observer(segment, observer)
+            # cross_product = direction_of_observer(segment, observer)
 
-            # Observer is on the right of line segment if cross product is positive
-            if cross_product > 0:
-                # Reverse the two points
-                # segment = [segment[1], segment[0]]
-                pass  # TODO looks like this is not needed, requires further testing
+            # # Observer is on the right of line segment if cross product is positive
+            # if cross_product > 0:
+            #     # Reverse the two points
+            #     # segment = [segment[1], segment[0]]
+            #     pass  # TODO looks like this is not needed, requires further testing
 
             segments.append(segment)
 
