@@ -1,0 +1,198 @@
+import pandas as pd
+import shapely.geometry as sg
+from shapely import get_coordinates, simplify
+
+from stage_1.src import api_request, array_math, extract_texture, visible_view
+
+
+class FacadeExtractor:
+
+    def __init__(
+        self,
+        texture_output_folder: str,
+        camera_height: float = 2.0,
+        texture_resolution: int = 30,
+        min_building_area: float = 15.0,
+        max_building_area: float = 400.0,
+        min_building_distance: float = 1.7,
+        max_building_distance: float = 9.0,
+        min_facade_length: float = 1.0,
+        building_search_radius: float = 10.0,
+        building_simplifaction_tolerance: float = 0.1,
+    ):
+        self.texture_output_folder = texture_output_folder
+        self.camera_height = camera_height
+        self.texture_resolution = texture_resolution
+        self.min_building_area = min_building_area
+        self.max_building_area = max_building_area
+        self.min_building_distance = min_building_distance
+        self.max_building_distance = max_building_distance
+        self.min_facade_length = min_facade_length
+        self.building_search_radius = building_search_radius
+        self.building_simplifaction_tolerance = building_simplifaction_tolerance
+
+    def get_admissible_data(self, observer, building_polygons):
+        """
+        Validate the GPS location of a panoramic image and the size of a building.
+        """
+        observer_point = sg.Point(observer)
+
+        admissible_building_polygons = {}
+        for k, v in list(building_polygons.items()):
+            building_poly = simplify(
+                geometry=sg.Polygon(v),
+                tolerance=self.building_simplifaction_tolerance,
+                preserve_topology=True,
+            )
+
+            # Check if point q is too close to a building
+            if (
+                building_poly.exterior.distance(observer_point)
+                < self.min_building_distance
+            ):
+                print("GNSS/INS measurement error found! Too close to building.")
+                return {}
+
+            # Check if point q is inside a building (GNSS/INS error)
+            if observer_point.intersects(building_poly):
+                print("GNSS/INS measurement error found! Point inside building.")
+                return {}
+
+            # Check for building area sizes that we ignore (Too large: Bijenkorf, too small: mini snackbar)
+            if self.min_building_area < building_poly.area < self.max_building_area:
+                admissible_building_polygons[k] = get_coordinates(
+                    building_poly
+                ).tolist()
+
+        return admissible_building_polygons
+
+    def get_facade_coordinates(
+        self,
+        building_polygons,
+        visibility_polygon,
+        pano_id,
+        observer,
+        image_url,
+        facade_data,
+    ):
+        """Get the two most distant visible points of a building."""
+        for pand_id in building_polygons.keys():
+            new_data = {}
+
+            # Get all the points from this polygon that are in the visibility polygon
+            visible_segments = visible_view.segments_in_visibility_polygon(
+                building_polygons[pand_id], visibility_polygon, observer
+            )
+
+            # If there are fewer than two visible points for a building we skip (no facade)
+            if len(visible_segments) == 0:
+                continue
+
+            ground_elevation, building_height = api_request.get_height_for_id(pand_id)
+            texture_height_irl = building_height - ground_elevation
+
+            for segment in visible_segments:
+                new_data = dict()
+
+                # Calculate the distance between two points
+                vector_facade = array_math.vector(segment[0], segment[1])
+                facade_length = array_math.vector_length(vector_facade)
+
+                # Validation 1. The length of a "normal" facade is at least more than 2 meters
+                if facade_length < self.min_facade_length:
+                    # Go to next iteration of for loop, check for other buildings in same panorama
+                    continue
+
+                # Distance observer to middlepoint
+                midpoint = array_math.get_midpoint(segment)
+                vector_distance = array_math.vector(midpoint, observer)
+                new_data["distance"] = round(
+                    array_math.vector_length(vector_distance), 6
+                )
+
+                # Validation 2. Errors are found in the rectification process when the distance is above 9
+                if new_data["distance"] > self.max_building_distance:
+                    # Go to next iteration of for loop, check for other buildings in same panorama
+                    continue
+
+                # Fill dict after all the validation checks
+                new_data["pand_id"] = str(pand_id)
+                new_data["visible_point_one"] = tuple(segment[0])  # TODO why a tuple
+                new_data["visible_point_two"] = tuple(segment[1])
+                new_data["pano_id"] = pano_id
+                new_data["pano_image_url"] = image_url
+                new_data["observer"] = observer
+                new_data["texture_height_irl"] = texture_height_irl
+                # The distance value makes the filename unique
+                new_data["texture_filename"] = (
+                    str(pand_id) + "_" + str(new_data["distance"])
+                )
+
+                facade_data.append(new_data)
+
+    def get_visible_building_edges(self, pano_ids, facade_data):
+        """
+        Estimation of buildings in range and identify visible building edges in 2D
+        map.
+        """
+        for pano_id in pano_ids:
+            # Get the panoramic image url and the location of the "observer"
+            image_url, observer, observer_wgs = api_request.get_pano_image(pano_id)
+
+            # Get BAG "pand" information. Search radius in meters from point "near"
+            pand_json = api_request.get_buildings_in_range(
+                observer_wgs, self.building_search_radius
+            )
+
+            # Get a dict of the buildings (footprint data) in range
+            building_polygons = api_request.get_building_polygons(pand_json)
+
+            # Validation checks on the GPS location and building polygons
+            building_polygons = self.get_admissible_data(observer, building_polygons)
+
+            if not building_polygons:
+                # print("No admissible building polygons in range. Go to the next panorama")
+                continue
+
+            # Generate the outlines of the arrangement
+            arr = visible_view.generate_arrangement(
+                observer, building_polygons.values()
+            )
+
+            # Get the Visibility Polygon for point q
+            visibility_polygon = visible_view.get_visibility_polygon(arr, observer)
+
+            # Get two most distant visible points of a builing
+            self.get_facade_coordinates(
+                building_polygons,
+                visibility_polygon,
+                pano_id,
+                observer,
+                image_url,
+                facade_data,
+            )
+
+    def extract_facade_texture(self, df: pd.DataFrame):
+        """
+        Extract facade textures from panoramic images.
+        """
+        for group_name, df_group in df.groupby(by="pano_image_url"):
+            # Get the panoramic image
+            source_image = api_request.download_pano_image(group_name)
+            if source_image is not None:
+                # Iterate over the rows that are inside a group
+                for _, row in df_group.iterrows():
+                    # Create the facade texture
+                    image_file = extract_texture.export_line_to_texture(
+                        (row["visible_point_one"], row["visible_point_two"]),
+                        self.texture_resolution,
+                        row["texture_height_irl"],
+                        self.camera_height,
+                        source_image,
+                        row["observer"],
+                    )
+                    # Save the facade texture
+                    filename = row["texture_filename"]
+                    image_file.save(
+                        f"{self.texture_output_folder}{filename}.jpeg", "jpeg"
+                    )

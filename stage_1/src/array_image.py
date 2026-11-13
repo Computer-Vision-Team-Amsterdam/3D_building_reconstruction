@@ -1,5 +1,6 @@
-from numpy import squeeze, dsplit, asarray, dstack, meshgrid, linspace
+from numpy import asarray, dsplit, dstack, squeeze
 from scipy.ndimage import map_coordinates
+
 
 def get_as_rgb_array(image_file):
     """
@@ -14,12 +15,13 @@ def get_as_rgb_array(image_file):
     # split image in the 3 RGB channels
     return squeeze(dsplit(panorama_array_image, 3))
 
+
 def sample_rgb_array_image_as_array(coordinates, rgb_array):
     """
     Resampling of the source image
 
-    :param coordinates: meshgrid of numpy arrays where each target coordinate is mapped to a coordinate set
-    of the source
+    :param coordinates: meshgrid of numpy arrays where each target coordinate is
+        mapped to a coordinate set of the source
     :param rgb_array: the source image as a numpy rgb array representation
     :return: the sampled target image as a scipy rgb array representation
     """
