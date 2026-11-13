@@ -40,32 +40,33 @@ dev = [
     "pytest-cov>=4.0.0",
     "safety>=3.2.4",
 ]
-yolo = [
+yolo_cpu = [
     "torch>=2.13.0",
     "torchvision>=0.26.0",
     "ultralytics>=8.3.0",
 ]
-cuda = [
+yolo_cuda = [
     "torch>=2.13.0",
     "torchvision>=0.26.0",
+    "ultralytics>=8.3.0",
 ]
 
 [tool.uv]
 conflicts = [
     [
-        { extra = "yolo" },
-        { extra = "cuda" },
+        { extra = "yolo_cpu" },
+        { extra = "yolo_cuda" },
     ],
 ]
 
 [tool.uv.sources]
 torch = [
-    { index = "pytorch-cpu", extra = "yolo" },
-    { index = "pytorch-cu126", extra = "cuda" },
+    { index = "pytorch-cpu", extra = "yolo_cpu" },
+    { index = "pytorch-cu126", extra = "yolo_cuda" },
 ]
 torchvision = [
-    { index = "pytorch-cpu", extra = "yolo" },
-    { index = "pytorch-cu126", extra = "cuda" },
+    { index = "pytorch-cpu", extra = "yolo_cpu" },
+    { index = "pytorch-cu126", extra = "yolo_cuda" },
 ]
 
 [[tool.uv.index]]
