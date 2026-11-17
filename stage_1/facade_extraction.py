@@ -16,6 +16,7 @@ class FacadeExtractor:
         target_area: sg.Polygon,
         panorama_year: int,
         texture_output_folder: str,
+        texture_output_format: str = ".jpeg",
         camera_height: float = 2.0,
         texture_resolution: int = 30,
         min_building_area: float = 15.0,
@@ -29,6 +30,7 @@ class FacadeExtractor:
         self.target_area = target_area
         self.panorama_year = panorama_year
         self.texture_output_folder = texture_output_folder
+        self.texture_output_format = texture_output_format
         self.camera_height = camera_height
         self.texture_resolution = texture_resolution
         self.min_building_area = min_building_area
@@ -41,6 +43,7 @@ class FacadeExtractor:
         self.state = 0
 
         if not os.path.exists(self.texture_output_folder):
+            print(f"Creating output folder {self.texture_output_folder}")
             os.makedirs(self.texture_output_folder)
         else:
             print(
@@ -86,7 +89,7 @@ class FacadeExtractor:
         self.panos_gdf = api_request.get_panos_in_area(
             target_area=self.target_area, mission_year=self.panorama_year
         )
-        print(f"{len(self.buildings_gdf)} panoramas found")
+        print(f"{len(self.panos_gdf)} panoramas found")
 
         self.state = 1
 
@@ -223,7 +226,7 @@ class FacadeExtractor:
 
         return pd.DataFrame(facade_data)
 
-    def extract_facade_texture(self, df: pd.DataFrame):
+    def extract_facade_texture(self, df: pd.DataFrame) -> None:
         """
         Extract facade textures from panoramic images.
         """
@@ -247,8 +250,9 @@ class FacadeExtractor:
                         row["observer"],
                     )
                     # Save the facade texture
-                    filename = row["texture_filename"]
+                    filename = row["texture_filename"] + self.texture_output_format
                     image_file.save(
-                        f"{self.texture_output_folder}{filename}.jpeg", "jpeg"
+                        os.path.join(self.texture_output_folder, filename),
+                        self.texture_output_format,
                     )
         self.state = 3
