@@ -18,6 +18,7 @@ from stage_1.facade_extraction import FacadeExtractor
 # API options
 BBOX_REGION = [122300.00, 486475.48, 122400.00, 486628.78]
 MISSION_YEAR = 2025  # API tag
+IMAGE_QUALITY = "medium"  # Download quality for panorama images
 SEARCH_RADIUS = 10  # Building search radius from an initial panoramic image location
 
 # Texture options
@@ -56,6 +57,7 @@ def main():
         target_area=target_area,
         panorama_year=MISSION_YEAR,
         texture_output_folder=IMAGES_OUTPUT,
+        panorama_quality=IMAGE_QUALITY,
         camera_height=CAMERA_HEIGHT,
         texture_resolution=TEXTURE_RESOLUTION,
         min_building_area=MIN_BUILDING_AREA,

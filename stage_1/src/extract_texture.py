@@ -20,10 +20,6 @@ from stage_1.src.array_math import (
 # helper constants for readability
 X, Y = 0, 1
 
-# We use the "panorama_4000" images, with the following dimensions
-SOURCE_WIDTH = 4000  # pixels
-PANO_HEIGHT = 2000  # pixels
-
 
 # Funtion that projects each facade grid point onto the panorama and samples the colours. Facades that are not forward facing, or are viewed at too "tilted" angle, become a grey placeholder, unless `force=True`
 def project_facade(facade, observer, source_file, img_height, resolution, force=True):
@@ -43,8 +39,8 @@ def project_facade(facade, observer, source_file, img_height, resolution, force=
             # 3D tuple of the coordinates of the vector on the panoramic image (equirectangular plane)
             image_x, image_y = cartesian2cylindrical(
                 (vector_y, vector_x, vector_z),
-                source_width=SOURCE_WIDTH,
-                source_height=PANO_HEIGHT,
+                source_width=source_file.width,
+                source_height=source_file.height,
                 r_is_1=False,
             )
             # Load the source panoramic image, return numpy image array (an array of three color channels)

@@ -15,7 +15,7 @@ import shapely
 from PIL import Image, ImageFile
 from pyproj import Transformer
 
-API_TIMEOUT = 10
+API_TIMEOUT = 30
 RETRY_ATTEMPTS = 5
 
 WGS84_EPSG = 4326
@@ -104,6 +104,12 @@ def get_panos_in_area(
     """
     Get panoramic image id's for a user defined bounding box region
     """
+    ALLOWED_IMG_QUALITY = ("small", "medium", "full")
+    if image_quality not in ALLOWED_IMG_QUALITY:
+        raise ValueError(
+            f"Unexpected value for image_quality, got {image_quality}, expected one of {ALLOWED_IMG_QUALITY}"
+        )
+
     minx, miny, maxx, maxy = target_area.bounds
     url = f"https://api.data.amsterdam.nl/panorama/panoramas/?tags=mission-{mission_year}&bbox={minx},{miny},{maxx},{maxy}&srid=28992"
 
@@ -128,7 +134,7 @@ def get_panos_in_area(
     return pano_gdf[pano_gdf.intersects(target_area)]
 
 
-def download_pano_image(pano_url: str) -> ImageFile:
+def download_pano_image(pano_url: str) -> ImageFile.ImageFile:
     """Download a panoramic image from the API"""
     response_content = get_request(pano_url, load_json=False)
     return Image.open(BytesIO(response_content))

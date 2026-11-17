@@ -16,7 +16,8 @@ class FacadeExtractor:
         target_area: sg.Polygon,
         panorama_year: int,
         texture_output_folder: str,
-        texture_output_format: str = ".jpeg",
+        texture_output_format: str = "jpeg",
+        panorama_quality: str = "medium",
         camera_height: float = 2.0,
         texture_resolution: int = 30,
         min_building_area: float = 15.0,
@@ -29,8 +30,9 @@ class FacadeExtractor:
     ):
         self.target_area = target_area
         self.panorama_year = panorama_year
+        self.panorama_quality = panorama_quality
         self.texture_output_folder = texture_output_folder
-        self.texture_output_format = texture_output_format
+        self.texture_output_format = texture_output_format.strip(".").lower()
         self.camera_height = camera_height
         self.texture_resolution = texture_resolution
         self.min_building_area = min_building_area
@@ -87,7 +89,9 @@ class FacadeExtractor:
 
         print("Gathering panorama metadata in target area...")
         self.panos_gdf = api_request.get_panos_in_area(
-            target_area=self.target_area, mission_year=self.panorama_year
+            target_area=self.target_area,
+            mission_year=self.panorama_year,
+            image_quality=self.panorama_quality,
         )
         print(f"{len(self.panos_gdf)} panoramas found")
 
@@ -250,7 +254,9 @@ class FacadeExtractor:
                         row["observer"],
                     )
                     # Save the facade texture
-                    filename = row["texture_filename"] + self.texture_output_format
+                    filename = (
+                        row["texture_filename"] + "." + self.texture_output_format
+                    )
                     image_file.save(
                         os.path.join(self.texture_output_folder, filename),
                         self.texture_output_format,
