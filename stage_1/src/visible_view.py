@@ -41,7 +41,7 @@ def generate_arrangement(observer: Point, polygons: List[Polygon]) -> npt.NDArra
 
 
 # Visibility polygon: casts a ray from the observer towards every segment endpoint, plus a small offset to either side, and keeps the nearest hit for each ray. The hit points form the visibility polygon
-def get_visibility_polygon(observer: Point, polygons: List[Polygon]):
+def get_visibility_polygon(observer: Point, polygons: List[Polygon]) -> Polygon:
     """Visibility polygon from the observer via ray casting against all
     segments"""
 
@@ -122,7 +122,7 @@ def direction_of_observer(segment, observer):
 # Which building segments are visible
 def segments_in_visibility_polygon(
     building_poly: Polygon, visibility_polygon: Polygon, observer: Point
-):
+) -> List[npt.NDArray]:
     """Keep building vertices that are inside or on the visibility polygon"""
     segments = []
 

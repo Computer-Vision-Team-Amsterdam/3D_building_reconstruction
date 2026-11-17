@@ -256,7 +256,7 @@ class FacadeExtractor:
                 # Iterate over the rows that are inside a group
                 for _, row in df_group.iterrows():
                     # Create the facade texture
-                    image_file = extract_texture.export_line_to_texture(
+                    image_file = extract_texture.export_facade_to_texture(
                         (row["visible_point_one"], row["visible_point_two"]),
                         self.texture_resolution,
                         row["texture_height_irl"],
