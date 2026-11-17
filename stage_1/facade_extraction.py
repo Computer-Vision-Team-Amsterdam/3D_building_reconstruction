@@ -52,7 +52,7 @@ class FacadeExtractor:
                 f"Warning: 'texture_output_folder' {self.texture_output_folder} already exists."
             )
 
-    def run(self) -> pd.DataFrame:
+    def run(self) -> Optional[pd.DataFrame]:
         print("--- Start ---")
 
         # Start timer
@@ -61,8 +61,19 @@ class FacadeExtractor:
         print("Step 1: Gather metadata for buildings and panoramas in target area.")
         self.gather_data()
 
+        if len(self.buildings_gdf) == 0:
+            print("No buildings in target area. Stopping.")
+            return None
+        if len(self.panos_gdf) == 0:
+            print("No panoramas in target area. Stopping.")
+            return None
+
         print("Step 2: Identify visible building edges in range of a panorama images.")
         facade_df = self.get_visible_building_edges()
+
+        if len(facade_df) == 0:
+            print("No facades in range of panoramas. Stopping.")
+            return None
 
         print("Step 3: Drop duplicate facade textures.")
         # Drop duplicate facade rows, keep the ones with shortest distance.
