@@ -3,20 +3,19 @@ Previous work by the City of Amsterdam:
 https://github.com/Amsterdam/panorama-textures/
 """
 
-from math import atan2, pi
 from typing import Any, Dict, Optional, Tuple
 
-from numpy import float64, full, int32, linspace, meshgrid
+from numpy import float64, full, int32, linspace, meshgrid, pi
 from numpy.typing import NDArray
 from PIL import Image, ImageFile
 
 from stage_1.src.array_image import get_as_rgb_array, sample_rgb_array_image_as_array
 from stage_1.src.array_math import (
     cartesian2cylindrical,
-    get_midpoint,
     get_vector,
-    vector,
-    vector_length,
+    get_vector_3d,
+    get_vector_length,
+    get_viewing_angle,
 )
 
 # helper constants for readability
@@ -35,14 +34,11 @@ def project_facade(
     nx = int(round(facade_plane["length"] * texture_resolution))
     if nx > 0:
         # Gets the distances to facades with observer as middlepoint
-        if (
-            not facade_plane["forward_facing"]
-            or (not 0.7 * pi > facade_plane["viewing_angle"] > 0.3 * pi)
-        ) and not force:
+        if not ((0.7 * pi > facade_plane["viewing_angle"] > 0.3 * pi) or force):
             facade_texture = full((texture_height, nx, 3), 128, dtype=int32)
         else:
             # 3D tuple of the vector
-            vector_x, vector_y, vector_z = get_vector(
+            vector_x, vector_y, vector_z = get_vector_3d(
                 (
                     facade_plane["x-mesh"],
                     facade_plane["y-mesh"],
@@ -80,28 +76,15 @@ def create_facade_plane(
     facade_plane = {
         "from": facade[0],
         "to": facade[1],
-        "vector": vector(facade[0], facade[1]),
+        "vector": get_vector(facade[0], facade[1]),
     }
     # Get the width of the facade
-    facade_plane["length"] = vector_length(facade_plane["vector"])
-
-    # Get midpoint of the facade and the distance from this point to the observer
-    midpoint = get_midpoint(facade)
-    to_midpoint = vector(observer, midpoint)
+    facade_plane["length"] = get_vector_length(facade_plane["vector"])
 
     # Calculate viewing angle from observer to facade
-    if facade_plane["length"] == 0 or vector_length(to_midpoint) == 0:
-        facade_plane["viewing_angle"] = 0
-    else:
-        dot = (
-            facade_plane["vector"][X] * to_midpoint[X]
-            + facade_plane["vector"][Y] * to_midpoint[Y]
-        )  # dot product
-        det = (
-            facade_plane["vector"][X] * to_midpoint[Y]
-            - facade_plane["vector"][Y] * to_midpoint[X]
-        )  # determinant
-        facade_plane["viewing_angle"] = atan2(det, dot)
+    facade_plane["viewing_angle"] = get_viewing_angle(
+        facade, (observer[0], observer[1])
+    )
 
     # Forward_facing is true when we have a viewing angle
     facade_plane["forward_facing"] = facade_plane["viewing_angle"] > 0

@@ -163,8 +163,8 @@ class FacadeExtractor:
                 new_data: Dict[str, Any] = dict()
 
                 # Calculate the distance between two points
-                vector_facade = array_math.vector(segment[0], segment[1])
-                facade_length = array_math.vector_length(vector_facade)
+                vector_facade = array_math.get_vector(segment[0], segment[1])
+                facade_length = array_math.get_vector_length(vector_facade)
 
                 # Validation 1. The length of a "normal" facade is at least more than 2 meters
                 if facade_length < self.min_facade_length:
@@ -173,15 +173,19 @@ class FacadeExtractor:
 
                 # Distance observer to middlepoint
                 midpoint = array_math.get_midpoint(segment)
-                vector_distance = array_math.vector(midpoint, (observer.x, observer.y))
-                new_data["distance"] = round(
-                    array_math.vector_length(vector_distance), 6
+                vector_distance = array_math.get_vector_length(
+                    array_math.get_vector(midpoint, (observer.x, observer.y))
                 )
 
                 # Validation 2. Errors are found in the rectification process when the distance is above 9
-                if new_data["distance"] > self.max_building_distance:
+                if vector_distance > self.max_building_distance:
                     # Go to next iteration of for loop, check for other buildings in same panorama
                     continue
+
+                # Viewing angle to facade
+                viewing_angle = array_math.get_viewing_angle(
+                    segment, (observer.x, observer.y)
+                )
 
                 # Fill dict after all the validation checks
                 new_data["pand_id"] = str(building.bag_id)
@@ -190,6 +194,8 @@ class FacadeExtractor:
                 new_data["pano_id"] = pano_id
                 new_data["pano_image_url"] = image_url
                 new_data["observer"] = (observer.x, observer.y)
+                new_data["distance"] = vector_distance
+                new_data["viewing_angle"] = viewing_angle
                 new_data["texture_height_irl"] = texture_height_irl
                 # The distance value makes the filename unique
                 new_data["texture_filename"] = (
