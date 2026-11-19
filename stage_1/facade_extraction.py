@@ -199,7 +199,7 @@ class FacadeExtractor:
                 new_data["texture_height_irl"] = texture_height_irl
                 # The distance value makes the filename unique
                 new_data["texture_filename"] = (
-                    str(building.bag_id) + "_" + str(new_data["distance"])
+                    str(building.bag_id) + "_" + str(round(new_data["distance"], 6))
                 )
 
                 facade_data.append(new_data)
